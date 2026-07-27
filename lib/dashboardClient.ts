@@ -104,23 +104,17 @@ export function initDashboard(data: DashboardData): () => void {
     const over = g.diff > 0;
     return `${label} (${badgeLabel(g.rate)}, 예산 대비 ${over ? "+" : ""}${fmtM(g.diff)}백만원 ${over ? "초과" : "미집행"})`;
   }
+  /** 비고에 "유의미한 차이"로 볼 최소 금액. 본사/법인 모두 동일 기준 적용. */
+  const REMARK_MIN_DIFF_WON = 30_000_000;
   /**
    * "비고"란에 표시할, 차이를 만든 원인 항목 1~2개를 찾는다.
-   * 집행률 괴리가 20%p 이상이면서, 차이 금액이 기준 규모(scaleBudget) 대비 3% 이상일 때만 "유의미"로 보고 채운다.
+   * 차이 금액이 REMARK_MIN_DIFF_WON(3천만원) 이상일 때만 "유의미"로 보고 채운다.
    * 원인 후보(byLabel)는 상위 항목과 같은 방향(초과/미달)으로 기여한 것 중 금액이 큰 순으로 최대 2개.
+   * 초과(+)는 빨강, 미달(-)은 초록으로 통일해서 표기한다.
    */
-  function attributionRemark(
-    byLabel: { label: string; actual: number; budget: number }[],
-    actual: number,
-    budget: number,
-    scaleBudget: number
-  ): string {
-    const rate = rateOf(actual, budget);
+  function attributionRemark(byLabel: { label: string; actual: number; budget: number }[], actual: number, budget: number): string {
     const diff = actual - budget;
-    if (rate === null || diff === 0) return "";
-    const rateOff = rate === Infinity ? Infinity : Math.abs(rate - 100);
-    const scaleRatio = scaleBudget > 0 ? Math.abs(diff) / scaleBudget : 0;
-    if (!(rateOff >= 20 && scaleRatio >= 0.03)) return "";
+    if (diff === 0 || Math.abs(diff) < REMARK_MIN_DIFF_WON) return "";
     const sign = diff > 0 ? 1 : -1;
     const contributors = byLabel
       .map((b) => ({ label: b.label, diff: b.actual - b.budget }))
@@ -128,7 +122,9 @@ export function initDashboard(data: DashboardData): () => void {
       .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
       .slice(0, 2);
     if (!contributors.length) return "";
-    return contributors.map((c) => `${c.label} ${c.diff >= 0 ? "+" : ""}${fmtM(c.diff)}백만원`).join(", ");
+    return contributors
+      .map((c) => `<span class="${c.diff >= 0 ? "neg" : "pos"}">${c.label} ${c.diff >= 0 ? "+" : ""}${fmtM(c.diff)}백만원</span>`)
+      .join(", ");
   }
   /** 전월 대비 증감 배지 (당월 보기에서만 의미가 있음). */
   function momBadgeHtml(current: number, previous: number | null): string {
@@ -542,8 +538,7 @@ export function initDashboard(data: DashboardData): () => void {
         const remark = attributionRemark(
           r.byMainAccount.map((a) => ({ label: a.account, actual: a.actual, budget: a.budget })),
           r.actual,
-          r.budget,
-          s.total.budget
+          r.budget
         );
         html += row(r.dept, r.actual, r.budget, "", hq, remark);
       });
@@ -660,16 +655,11 @@ export function initDashboard(data: DashboardData): () => void {
       )
     );
 
-    // 집행률 괴리와 금액이 둘 다 유의미할 때만, 원인이 되는 구분(부서) 1~2개를 "구분 +차이금액"으로 뽑는다.
-    const mainAccountRemark = (r: MainAccountRow, hqTotalBudget: number): string =>
-      attributionRemark(
-        r.byDept.map((d) => ({ label: d.dept, actual: d.actual, budget: d.budget })),
-        r.actual,
-        r.budget,
-        hqTotalBudget
-      );
+    // 차이 금액이 유의미할 때만, 원인이 되는 구분(부서) 1~2개를 "구분 +차이금액"으로 뽑는다.
+    const mainAccountRemark = (r: MainAccountRow): string =>
+      attributionRemark(r.byDept.map((d) => ({ label: d.dept, actual: d.actual, budget: d.budget })), r.actual, r.budget);
 
-    const mainAccountTable = (rows: MainAccountRow[], hqTotalBudget: number): string => {
+    const mainAccountTable = (rows: MainAccountRow[]): string => {
       const bodyRows = rows
         .map((r) => {
           const diff = r.actual - r.budget;
@@ -677,7 +667,7 @@ export function initDashboard(data: DashboardData): () => void {
             <td${cls(r.budget)}>${fmtM(r.budget)}</td><td${cls(r.actual)}>${fmtM(r.actual)}</td>
             <td${diffCls(diff)}>${diff >= 0 ? "+" : ""}${fmtM(diff)}</td>
             <td class="badge-cell">${rateBadgeCell(rateOf(r.actual, r.budget))}</td>
-            <td class="remark-cell">${mainAccountRemark(r, hqTotalBudget)}</td></tr>`;
+            <td class="remark-cell">${mainAccountRemark(r)}</td></tr>`;
         })
         .join("");
       const totA = rows.reduce((sum, r) => sum + r.actual, 0);
@@ -691,9 +681,9 @@ export function initDashboard(data: DashboardData): () => void {
       return `<table class="pl-tbl"><thead><tr><th>대계정</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th><th>비고</th></tr></thead><tbody>${bodyRows}${totRow}</tbody></table>`;
     };
     setText("hqMainAccountTblSub", scopeLabel() + " · 백만원");
-    setHtml("hqMainAccountTable", mainAccountTable(scope.mainAccountByHq["본사"], s.hq_totals["본사"].budget));
+    setHtml("hqMainAccountTable", mainAccountTable(scope.mainAccountByHq["본사"]));
     setText("corpMainAccountTblSub", scopeLabel() + " · 백만원");
-    setHtml("corpMainAccountTable", mainAccountTable(scope.mainAccountByHq["법인"], s.hq_totals["법인"].budget));
+    setHtml("corpMainAccountTable", mainAccountTable(scope.mainAccountByHq["법인"]));
   }
 
   // ================= EVCS TAB =================
@@ -772,24 +762,6 @@ export function initDashboard(data: DashboardData): () => void {
     }
     setHtml("evcsInsight", `<div class="callout info"><div class="ic">🔋</div><div>${insightMsg}</div></div>`);
 
-    setHtml(
-      "evcsTrendLegend",
-      legendLineHtml([
-        { color: "#0891b2", label: "국내 예산", dashed: true },
-        { color: "#0891b2", label: "국내 실적" },
-        { color: "#0f172a", label: "해외 예산", dashed: true },
-        { color: "#0f172a", label: "해외 실적" },
-      ])
-    );
-    queueChart("evcs", "evcsTrendChart", () =>
-      lineChartMulti("evcsTrendChart", months, [
-        { label: "국내 예산", data: trend.evcs_domestic.map((x) => x.budget), borderColor: "#0891b2", borderDash: [5, 4], backgroundColor: "#0891b2", tension: 0.3, pointRadius: 2 },
-        { label: "국내 실적", data: trend.evcs_domestic.map((x) => x.actual), borderColor: "#0891b2", backgroundColor: "#0891b2", tension: 0.3 },
-        { label: "해외 예산", data: trend.evcs_overseas.map((x) => x.budget), borderColor: "#0f172a", borderDash: [5, 4], backgroundColor: "#0f172a", tension: 0.3, pointRadius: 2 },
-        { label: "해외 실적", data: trend.evcs_overseas.map((x) => x.actual), borderColor: "#0f172a", backgroundColor: "#0f172a", tension: 0.3 },
-      ])
-    );
-
     let catHtml = `<table class="pl-tbl"><thead><tr><th>구분</th><th>국내 예산</th><th>국내 실적</th><th>국내 차이</th><th>국내 집행률</th><th>해외 예산</th><th>해외 실적</th><th>해외 차이</th><th>해외 집행률</th></tr></thead><tbody>`;
     e.byCategory.forEach((c) => {
       const dr = rateOf(c.dom_actual, c.dom_budget);
@@ -847,25 +819,6 @@ export function initDashboard(data: DashboardData): () => void {
     });
     queueChart("evcs", "certComboChart", () =>
       comboChart("certComboChart", allMonths, certComboActualFull, certComboBudgetFull, C_ALT, [futureShadePlugin(lastActualIdx)])
-    );
-
-    // 인증대행료 추이 (당월까지만 조회 — 미경과 기간 확장은 위 콤보 차트로 이동)
-    setHtml(
-      "certTrendLegend",
-      legendLineHtml([
-        { color: C_ALT, label: "국내 예산", dashed: true },
-        { color: C_ALT, label: "국내 실적" },
-        { color: C_ALT2, label: "해외 예산", dashed: true },
-        { color: C_ALT2, label: "해외 실적" },
-      ])
-    );
-    queueChart("evcs", "certTrendChart", () =>
-      lineChartMulti("certTrendChart", months, [
-        { label: "국내 예산", data: trend.cert_domestic.map((x) => x.budget), borderColor: C_ALT, borderDash: [5, 4], backgroundColor: C_ALT, tension: 0.3, pointRadius: 2 },
-        { label: "국내 실적", data: trend.cert_domestic.map((x) => x.actual), borderColor: C_ALT, backgroundColor: C_ALT, tension: 0.3 },
-        { label: "해외 예산", data: trend.cert_overseas.map((x) => x.budget), borderColor: C_ALT2, borderDash: [5, 4], backgroundColor: C_ALT2, tension: 0.3, pointRadius: 2 },
-        { label: "해외 실적", data: trend.cert_overseas.map((x) => x.actual), borderColor: C_ALT2, backgroundColor: C_ALT2, tension: 0.3 },
-      ])
     );
   }
 

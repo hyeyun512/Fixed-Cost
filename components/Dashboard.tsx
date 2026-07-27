@@ -288,19 +288,6 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           </div>
         </div>
 
-        <div className="panel" style={{ marginBottom: 16 }}>
-          <div className="panel-hd">
-            <div>
-              <div className="panel-title">EVCS 국내 · 해외 추이</div>
-              <div className="panel-sub">1월~당월 · 백만원</div>
-            </div>
-            <div className="legend" id="evcsTrendLegend" />
-          </div>
-          <div className="chart-wrap-lg">
-            <canvas id="evcsTrendChart" />
-          </div>
-        </div>
-
         <div className="section-lead">EVCS 구분별(계정 그룹) 상세</div>
         <div className="tbl-box">
           <div id="evcsCatTable" />
@@ -353,18 +340,6 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           </div>
           <div className="chart-wrap-lg">
             <canvas id="certComboChart" />
-          </div>
-        </div>
-        <div className="panel">
-          <div className="panel-hd">
-            <div>
-              <div className="panel-title">인증대행료 추이</div>
-              <div className="panel-sub">예산 1월~12월 · 실적 1월~당월 · 백만원</div>
-            </div>
-            <div className="legend" id="certTrendLegend" />
-          </div>
-          <div className="chart-wrap-lg">
-            <canvas id="certTrendChart" />
           </div>
         </div>
       </div>
