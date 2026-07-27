@@ -59,20 +59,54 @@ export function initDashboard(data: DashboardData): () => void {
   function rateBadgeCell(rate: number | null): string {
     return `<span class="kbadge ${badgeClass(rate)}">${badgeLabel(rate)}</span>`;
   }
-  /** 항목들 중 집행률(예산 대비 실적)이 가장 높은(위험한) 항목을 찾는다. 예산없음(Infinity)을 최우선으로 취급. */
-  function topRisk<T extends { actual: number; budget: number }>(items: T[]): (T & { rate: number | null }) | null {
-    let best: (T & { rate: number | null }) | null = null;
+  /**
+   * 집행률만 극단적이고 금액은 미미한 항목이 1순위로 뽑히지 않도록,
+   * "집행률 괴리 정도"와 "차이 금액(백만원)"을 함께 곱해 중요도를 매긴다.
+   * 예: 예산1/실적5(500%, 차이 4원)보다 예산10억/실적12억(120%, 차이 2억)이 더 중요한 이슈다.
+   */
+  function gapScore(rate: number | null, diff: number): number {
+    if (rate === null) return -Infinity;
+    if (rate === Infinity) return Infinity;
+    return (Math.abs(diff) / 1e6) * (Math.abs(rate - 100) / 100);
+  }
+  type GapItem<T> = T & { rate: number | null; diff: number };
+  /** 이미 rate/diff가 계산된 목록 중 gapScore가 가장 큰 항목을 찾는다(over/under를 미리 나눠 각각 호출할 때 사용). */
+  function maxByGap<T extends { rate: number | null; diff: number }>(items: T[]): T | null {
+    let best: T | null = null;
+    for (const it of items) {
+      if (it.rate === null) continue;
+      if (!best || gapScore(it.rate, it.diff) > gapScore(best.rate, best.diff)) best = it;
+    }
+    return best;
+  }
+  /** 항목들 중 "집행률 괴리 × 금액 차이"가 가장 큰(=경영상 가장 중요한) 항목을 찾는다. */
+  function topGap<T extends { actual: number; budget: number }>(items: T[]): GapItem<T> | null {
+    let best: GapItem<T> | null = null;
     let bestScore = -Infinity;
     for (const it of items) {
       const rate = rateOf(it.actual, it.budget);
-      if (rate === null) continue;
-      const score = rate === Infinity ? Number.MAX_SAFE_INTEGER : rate;
+      const diff = it.actual - it.budget;
+      const score = gapScore(rate, diff);
       if (score > bestScore) {
         bestScore = score;
-        best = { ...it, rate };
+        best = { ...it, rate, diff };
       }
     }
     return best;
+  }
+  /** "OO (110%, 예산 대비 +80백만원 초과)" 형태의 괴리 설명 문구. */
+  function describeGap(label: string, g: { rate: number | null; diff: number }): string {
+    if (g.rate === Infinity) return `${label} (예산 없이 ${fmtM(g.diff)}백만원 집행)`;
+    if (g.rate === null) return label;
+    const over = g.diff > 0;
+    return `${label} (${badgeLabel(g.rate)}, 예산 대비 ${over ? "+" : ""}${fmtM(g.diff)}백만원 ${over ? "초과" : "미집행"})`;
+  }
+  /** 전월 대비 증감 배지 (당월 보기에서만 의미가 있음). */
+  function momBadgeHtml(current: number, previous: number | null): string {
+    if (!previous) return "";
+    const momPct = ((current - previous) / previous) * 100;
+    const up = momPct > 0;
+    return ` <span style="color:${up ? "#dc2626" : "#16a34a"};font-weight:600">${up ? "▲" : "▼"} 전월대비 ${Math.abs(Math.round(momPct))}%</span>`;
   }
   function scopeLabel(): string {
     if (currentMode === "month") return currentMonth + " (당월)";
@@ -303,13 +337,13 @@ export function initDashboard(data: DashboardData): () => void {
   }
 
   // ============ KPI card ============
-  function kcard(color: string, label: string, actual: number, budget: number): string {
+  function kcard(color: string, label: string, actual: number, budget: number, momHtml = ""): string {
     const diff = actual - budget;
     const rate = rateOf(actual, budget);
     return `<div class="kcard"><div class="kcard-bar" style="background:${color}"></div>
       <div class="klabel">${label}</div>
       <div class="kval">${fmtM(actual)}<span class="kunit"> 백만원</span></div>
-      <div class="ksub">예산 ${fmtM(budget)} 백만원 · 차이 ${diff >= 0 ? "+" : ""}${fmtM(diff)}</div>
+      <div class="ksub">예산 ${fmtM(budget)} 백만원 · 차이 ${diff >= 0 ? "+" : ""}${fmtM(diff)}${momHtml}</div>
       <span class="kbadge ${badgeClass(rate)}">집행률 ${badgeLabel(rate)}</span></div>`;
   }
 
@@ -339,22 +373,17 @@ export function initDashboard(data: DashboardData): () => void {
       rate = rateOf(a, b);
 
     // 전월 대비 당월 실적 증감 (당월 보기일 때만, 비교 가능한 전월이 있을 때만 표시)
-    let momHtml = "";
-    if (currentMode === "month") {
-      const idx = months.indexOf(currentMonth);
-      const prevActual = idx > 0 ? data.byMonth[months[idx - 1]].summary.total.actual : null;
-      if (prevActual) {
-        const momPct = ((a - prevActual) / prevActual) * 100;
-        const up = momPct > 0;
-        momHtml = ` <span style="color:${up ? "#dc2626" : "#16a34a"};font-weight:600">${up ? "▲" : "▼"} 전월대비 ${Math.abs(Math.round(momPct))}%</span>`;
-      }
-    }
+    const prevMonthIdx = months.indexOf(currentMonth) - 1;
+    const summaryMomHtml =
+      currentMode === "month" && prevMonthIdx >= 0
+        ? momBadgeHtml(a, data.byMonth[months[prevMonthIdx]].summary.total.actual)
+        : "";
 
     setHtml(
       "summaryKpis",
       `<div class="kcard"><div class="kcard-bar" style="background:#2563eb"></div>
           <div class="klabel">집행 실적</div><div class="kval">${fmtM(a)}<span class="kunit"> 백만원</span></div>
-          <div class="ksub">${scopeLabel()}${momHtml}</div></div>` +
+          <div class="ksub">${scopeLabel()}${summaryMomHtml}</div></div>` +
         `<div class="kcard"><div class="kcard-bar" style="background:#94a3b8"></div>
           <div class="klabel">예산</div><div class="kval">${fmtM(b)}<span class="kunit"> 백만원</span></div>
           <div class="ksub">${scopeLabel()}</div></div>` +
@@ -367,9 +396,10 @@ export function initDashboard(data: DashboardData): () => void {
           <span class="kbadge ${badgeClass(rate)}">${badgeLabel(rate)}</span></div>`
     );
 
-    // 경영진 요약 코멘트: 전사 집행 상태 + 가장 위험한 부서/계정과목 한눈에 보기
-    const deptRisk = topRisk(s.rows.map((r) => ({ label: r.dept, actual: r.actual, budget: r.budget })));
-    const catRisk = topRisk(scope.category.map((c) => ({ label: c.category, actual: c.actual, budget: c.budget })));
+    // 경영진 요약 코멘트: 전사 집행 상태 + "집행률 괴리가 크면서 금액도 유의미한" 부서/계정과목 한눈에 보기
+    // (단순 집행률 최고/최저가 아니라, 괴리율×금액을 함께 고려 — 예산 1원짜리가 500%를 찍어도 의미 없음)
+    const deptGap = topGap(s.rows.map((r) => ({ label: r.dept, actual: r.actual, budget: r.budget })));
+    const catGap = topGap(scope.category.map((c) => ({ label: c.category, actual: c.actual, budget: c.budget })));
     const rateText =
       rate === null
         ? "집행 실적이 아직 없습니다"
@@ -377,8 +407,8 @@ export function initDashboard(data: DashboardData): () => void {
         ? "예산이 없는 상태에서 집행이 발생했습니다"
         : `집행률 ${Math.round(rate)}%로 ${rate > 110 ? "예산을 초과 집행" : rate < 70 ? "예산 대비 여유 있게 집행" : "예산 범위 내에서 안정적으로 집행"}되고 있습니다`;
     const insightParts = [`<b>${scopeLabel()} 전사 실적</b> — ${rateText}.`];
-    if (deptRisk) insightParts.push(`부서 중 집행률이 가장 높은 곳은 <b>${deptRisk.label} (${badgeLabel(deptRisk.rate)})</b>입니다.`);
-    if (catRisk) insightParts.push(`계정과목 중에서는 <b>${catRisk.label} (${badgeLabel(catRisk.rate)})</b>의 집행률이 가장 높아 확인이 필요합니다.`);
+    if (deptGap) insightParts.push(`예산과의 괴리가 가장 큰 부서는 <b>${describeGap(deptGap.label, deptGap)}</b>입니다.`);
+    if (catGap) insightParts.push(`계정과목 중에서는 <b>${describeGap(catGap.label, catGap)}</b>의 괴리가 커 확인이 필요합니다.`);
     const isAlert = rate !== null && (rate === Infinity || rate > 130);
     setHtml(
       "summaryInsight",
@@ -466,15 +496,17 @@ export function initDashboard(data: DashboardData): () => void {
       barChart("categoryChart", cats.map((c) => c.category), cats.map((c) => c.actual), cats.map((c) => c.budget))
     );
 
-    const withRate = cats.map((c) => ({ ...c, rate: rateOf(c.actual, c.budget) })).filter((c) => c.rate !== null && c.rate !== Infinity);
-    if (withRate.length) {
-      const over = [...withRate].sort((a, b) => (b.rate as number) - (a.rate as number))[0];
-      const under = [...withRate].sort((a, b) => (a.rate as number) - (b.rate as number))[0];
+    // 집행률만 보지 않고 "괴리율 × 금액"이 큰 구분을 뽑는다 (금액이 미미하면 집행률이 튀어도 후순위).
+    const catsWithGap = cats.map((c) => ({ ...c, rate: rateOf(c.actual, c.budget), diff: c.actual - c.budget }));
+    const topOver = maxByGap(catsWithGap.filter((c) => c.diff > 0));
+    const topUnder = maxByGap(catsWithGap.filter((c) => c.diff < 0));
+    if (topOver || topUnder) {
+      const sentences: string[] = [];
+      if (topOver) sentences.push(`초과 폭이 가장 큰 구분은 <b>${describeGap(topOver.category, topOver)}</b>입니다.`);
+      if (topUnder) sentences.push(`미집행 폭이 가장 큰 구분은 <b>${describeGap(topUnder.category, topUnder)}</b>입니다.`);
       setHtml(
         "catInsight",
-        `<div class="callout info"><div class="ic">💡</div>
-          <div><b>${scopeLabel()} 요약</b> — 예산 대비 집행률이 가장 높은 구분은 <b>${over.category} (${Math.round(over.rate as number)}%)</b>,
-          가장 낮은 구분은 <b>${under.category} (${Math.round(under.rate as number)}%)</b>입니다.</div></div>`
+        `<div class="callout info"><div class="ic">💡</div><div><b>${scopeLabel()} 요약</b> — ${sentences.join(" ")}</div></div>`
       );
     }
 
@@ -554,11 +586,25 @@ export function initDashboard(data: DashboardData): () => void {
     const totA = domA + ovsA,
       totB = domB + ovsB;
 
+    // 전월 대비 증감 (당월 보기일 때만, 비교 가능한 전월이 있을 때만 표시) - Summary 탭과 동일한 방식
+    const prevEvcsMonthIdx = months.indexOf(currentMonth) - 1;
+    let evcsMomTot = "",
+      evcsMomDom = "",
+      evcsMomOvs = "";
+    if (currentMode === "month" && prevEvcsMonthIdx >= 0) {
+      const prevM = data.byMonth[months[prevEvcsMonthIdx]];
+      const prevDom = prevM.evcs.total.domestic.actual;
+      const prevOvs = prevM.evcs.total.overseas.actual;
+      evcsMomTot = momBadgeHtml(totA, prevDom + prevOvs);
+      evcsMomDom = momBadgeHtml(domA, prevDom);
+      evcsMomOvs = momBadgeHtml(ovsA, prevOvs);
+    }
+
     setHtml(
       "evcsKpis",
-      kcard("#2563eb", "EVCS 전체 실적", totA, totB) +
-        kcard("#0891b2", "국내", domA, domB) +
-        kcard("#0f172a", "해외", ovsA, ovsB) +
+      kcard("#2563eb", "EVCS 전체 실적", totA, totB, evcsMomTot) +
+        kcard("#0891b2", "국내", domA, domB, evcsMomDom) +
+        kcard("#0f172a", "해외", ovsA, ovsB, evcsMomOvs) +
         `<div class="kcard"><div class="kcard-bar" style="background:#7c3aed"></div>
           <div class="klabel">해외 비중</div><div class="kval">${Math.round((ovsA / (totA || 1)) * 100)}<span class="kunit">%</span></div>
           <div class="ksub">${scopeLabel()} 기준</div></div>`
