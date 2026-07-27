@@ -59,6 +59,21 @@ export function initDashboard(data: DashboardData): () => void {
   function rateBadgeCell(rate: number | null): string {
     return `<span class="kbadge ${badgeClass(rate)}">${badgeLabel(rate)}</span>`;
   }
+  /** 항목들 중 집행률(예산 대비 실적)이 가장 높은(위험한) 항목을 찾는다. 예산없음(Infinity)을 최우선으로 취급. */
+  function topRisk<T extends { actual: number; budget: number }>(items: T[]): (T & { rate: number | null }) | null {
+    let best: (T & { rate: number | null }) | null = null;
+    let bestScore = -Infinity;
+    for (const it of items) {
+      const rate = rateOf(it.actual, it.budget);
+      if (rate === null) continue;
+      const score = rate === Infinity ? Number.MAX_SAFE_INTEGER : rate;
+      if (score > bestScore) {
+        bestScore = score;
+        best = { ...it, rate };
+      }
+    }
+    return best;
+  }
   function scopeLabel(): string {
     if (currentMode === "month") return currentMonth + " (당월)";
     return data.byMonth[currentMonth].cumulative.label;
@@ -318,29 +333,56 @@ export function initDashboard(data: DashboardData): () => void {
     const s = scope.summary;
     setText("sumTblSub", scopeLabel() + " · 백만원");
 
+    const a = s.total.actual,
+      b = s.total.budget,
+      diff = a - b,
+      rate = rateOf(a, b);
+
+    // 전월 대비 당월 실적 증감 (당월 보기일 때만, 비교 가능한 전월이 있을 때만 표시)
+    let momHtml = "";
+    if (currentMode === "month") {
+      const idx = months.indexOf(currentMonth);
+      const prevActual = idx > 0 ? data.byMonth[months[idx - 1]].summary.total.actual : null;
+      if (prevActual) {
+        const momPct = ((a - prevActual) / prevActual) * 100;
+        const up = momPct > 0;
+        momHtml = ` <span style="color:${up ? "#dc2626" : "#16a34a"};font-weight:600">${up ? "▲" : "▼"} 전월대비 ${Math.abs(Math.round(momPct))}%</span>`;
+      }
+    }
+
     setHtml(
       "summaryKpis",
-      (() => {
-        const a = s.total.actual,
-          b = s.total.budget,
-          diff = a - b,
-          rate = rateOf(a, b);
-        return (
-          `<div class="kcard"><div class="kcard-bar" style="background:#2563eb"></div>
-            <div class="klabel">집행 실적</div><div class="kval">${fmtM(a)}<span class="kunit"> 백만원</span></div>
-            <div class="ksub">${scopeLabel()}</div></div>` +
-          `<div class="kcard"><div class="kcard-bar" style="background:#94a3b8"></div>
-            <div class="klabel">예산</div><div class="kval">${fmtM(b)}<span class="kunit"> 백만원</span></div>
-            <div class="ksub">${scopeLabel()}</div></div>` +
-          `<div class="kcard"><div class="kcard-bar" style="background:${diff > 0 ? "#dc2626" : "#16a34a"}"></div>
-            <div class="klabel">차이 금액 (실적-예산)</div>
-            <div class="kval" style="color:${diff > 0 ? "#dc2626" : "#16a34a"}">${diff >= 0 ? "+" : ""}${fmtM(diff)}<span class="kunit"> 백만원</span></div>
-            <div class="ksub">&nbsp;</div></div>` +
-          `<div class="kcard"><div class="kcard-bar" style="background:#7c3aed"></div>
-            <div class="klabel">집행률</div><div class="kval">${rate === null ? "-" : rate === Infinity ? "∞" : Math.round(rate) + "%"}</div>
-            <span class="kbadge ${badgeClass(rate)}">${badgeLabel(rate)}</span></div>`
-        );
-      })()
+      `<div class="kcard"><div class="kcard-bar" style="background:#2563eb"></div>
+          <div class="klabel">집행 실적</div><div class="kval">${fmtM(a)}<span class="kunit"> 백만원</span></div>
+          <div class="ksub">${scopeLabel()}${momHtml}</div></div>` +
+        `<div class="kcard"><div class="kcard-bar" style="background:#94a3b8"></div>
+          <div class="klabel">예산</div><div class="kval">${fmtM(b)}<span class="kunit"> 백만원</span></div>
+          <div class="ksub">${scopeLabel()}</div></div>` +
+        `<div class="kcard"><div class="kcard-bar" style="background:${diff > 0 ? "#dc2626" : "#16a34a"}"></div>
+          <div class="klabel">차이 금액 (실적-예산)</div>
+          <div class="kval" style="color:${diff > 0 ? "#dc2626" : "#16a34a"}">${diff >= 0 ? "+" : ""}${fmtM(diff)}<span class="kunit"> 백만원</span></div>
+          <div class="ksub">&nbsp;</div></div>` +
+        `<div class="kcard"><div class="kcard-bar" style="background:#7c3aed"></div>
+          <div class="klabel">집행률</div><div class="kval">${rate === null ? "-" : rate === Infinity ? "∞" : Math.round(rate) + "%"}</div>
+          <span class="kbadge ${badgeClass(rate)}">${badgeLabel(rate)}</span></div>`
+    );
+
+    // 경영진 요약 코멘트: 전사 집행 상태 + 가장 위험한 부서/계정과목 한눈에 보기
+    const deptRisk = topRisk(s.rows.map((r) => ({ label: r.dept, actual: r.actual, budget: r.budget })));
+    const catRisk = topRisk(scope.category.map((c) => ({ label: c.category, actual: c.actual, budget: c.budget })));
+    const rateText =
+      rate === null
+        ? "집행 실적이 아직 없습니다"
+        : rate === Infinity
+        ? "예산이 없는 상태에서 집행이 발생했습니다"
+        : `집행률 ${Math.round(rate)}%로 ${rate > 110 ? "예산을 초과 집행" : rate < 70 ? "예산 대비 여유 있게 집행" : "예산 범위 내에서 안정적으로 집행"}되고 있습니다`;
+    const insightParts = [`<b>${scopeLabel()} 전사 실적</b> — ${rateText}.`];
+    if (deptRisk) insightParts.push(`부서 중 집행률이 가장 높은 곳은 <b>${deptRisk.label} (${badgeLabel(deptRisk.rate)})</b>입니다.`);
+    if (catRisk) insightParts.push(`계정과목 중에서는 <b>${catRisk.label} (${badgeLabel(catRisk.rate)})</b>의 집행률이 가장 높아 확인이 필요합니다.`);
+    const isAlert = rate !== null && (rate === Infinity || rate > 130);
+    setHtml(
+      "summaryInsight",
+      `<div class="callout ${isAlert ? "alert" : "info"}"><div class="ic">${isAlert ? "⚠️" : "📌"}</div><div>${insightParts.join(" ")}</div></div>`
     );
 
     // 신규: 월별 실적 추이 콤보 차트 (항상 전체 월 범위, 당월 기준)

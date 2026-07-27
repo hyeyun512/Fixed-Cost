@@ -66,6 +66,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
 
       {/* ===================== SUMMARY TAB ===================== */}
       <div id="tab-summary" className="content active">
+        <div id="summaryInsight" />
         <div className="kpi-row" id="summaryKpis" />
 
         <div className="chart-2eq">
