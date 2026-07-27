@@ -134,7 +134,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         </div>
 
         <div className="section-lead">
-          보고용(re) 부문별 상세<span className="sub">본사(사업/개발/SCM/Media/Staff) · 법인(해외법인별)</span>
+          보고용 부문별 상세<span className="sub">본사(사업/개발/SCM/Media/Staff) · 법인(해외법인별)</span>
         </div>
         <div className="tbl-box">
           <div id="deptTable" />

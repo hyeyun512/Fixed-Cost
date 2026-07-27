@@ -1,6 +1,13 @@
 export type AB = { actual: number; budget: number };
 
-export type SummaryRow = { hq_corp: string; dept: string; actual: number; budget: number };
+export type SummaryMainAccountRow = { account: string; actual: number; budget: number };
+export type SummaryRow = {
+  hq_corp: string;
+  dept: string;
+  actual: number;
+  budget: number;
+  byMainAccount: SummaryMainAccountRow[];
+};
 export type SummaryBlock = {
   rows: SummaryRow[];
   hq_totals: Record<string, AB>;

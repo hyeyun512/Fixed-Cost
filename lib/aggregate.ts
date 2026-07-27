@@ -111,32 +111,56 @@ export async function loadDashboardData(): Promise<DashboardData> {
     return a.localeCompare(b, "ko");
   });
 
-  function sumByHqDept(rows: Row[]): Map<string, SummaryRow> {
+  function sumByHqDept(rows: Row[]): { map: Map<string, SummaryRow>; byAccount: Map<string, Map<string, number>> } {
     const map = new Map<string, SummaryRow>();
+    const byAccount = new Map<string, Map<string, number>>();
     for (const r of rows) {
       const hq = r.hq_corp || "기타";
       const dept = r.report_use_re || "미분류";
       const key = hq + "|" + dept;
-      const cur = map.get(key) || { hq_corp: hq, dept, actual: 0, budget: 0 };
+      const cur = map.get(key) || { hq_corp: hq, dept, actual: 0, budget: 0, byMainAccount: [] };
       cur.actual += n(r.amount_krw);
       map.set(key, cur);
+      if (r.main_account_re) {
+        const am = byAccount.get(key) || new Map<string, number>();
+        am.set(r.main_account_re, (am.get(r.main_account_re) || 0) + n(r.amount_krw));
+        byAccount.set(key, am);
+      }
     }
-    return map;
+    return { map, byAccount };
   }
-  function addBudgetToMap(map: Map<string, SummaryRow>, rows: Row[]) {
+  function addBudgetToMap(
+    map: Map<string, SummaryRow>,
+    byAccount: Map<string, Map<string, number>>,
+    rows: Row[]
+  ) {
     for (const r of rows) {
       const hq = r.hq_corp || "기타";
       const dept = r.report_use_re || "미분류";
       const key = hq + "|" + dept;
-      const cur = map.get(key) || { hq_corp: hq, dept, actual: 0, budget: 0 };
+      const cur = map.get(key) || { hq_corp: hq, dept, actual: 0, budget: 0, byMainAccount: [] };
       cur.budget += n(r.amount_krw);
       map.set(key, cur);
+      if (r.main_account_re) {
+        const am = byAccount.get(key) || new Map<string, number>();
+        am.set(r.main_account_re, (am.get(r.main_account_re) || 0) + n(r.amount_krw));
+        byAccount.set(key, am);
+      }
     }
   }
 
   function summaryForRows(actRows: Row[], budRows: Row[]): SummaryBlock {
-    const map = sumByHqDept(actRows);
-    addBudgetToMap(map, budRows);
+    const { map, byAccount: actByAccount } = sumByHqDept(actRows);
+    const budByAccount = new Map<string, Map<string, number>>();
+    addBudgetToMap(map, budByAccount, budRows);
+    for (const [key, sr] of map) {
+      const accounts = new Set<string>([...(actByAccount.get(key)?.keys() || []), ...(budByAccount.get(key)?.keys() || [])]);
+      sr.byMainAccount = [...accounts].map((acc) => ({
+        account: acc,
+        actual: actByAccount.get(key)?.get(acc) || 0,
+        budget: budByAccount.get(key)?.get(acc) || 0,
+      }));
+    }
     const rows = [...map.values()].sort(
       (a, b) => (HQ_ORDER[a.hq_corp] ?? 9) - (HQ_ORDER[b.hq_corp] ?? 9) || a.dept.localeCompare(b.dept, "ko")
     );
