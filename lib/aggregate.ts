@@ -10,6 +10,8 @@ import type {
   EvcsCatRow,
   Trend,
   TrendPoint,
+  MainAccountRow,
+  MainAccountByHq,
 } from "./types";
 
 const BUDGET_TABLE = "26년 예산(BP)";
@@ -89,12 +91,21 @@ export async function loadDashboardData(): Promise<DashboardData> {
 
   const categorySet = new Set<string>();
   const feeSet = new Set<string>();
+  const mainAccountSet = new Set<string>();
   for (const r of [...actualRows, ...budgetRows]) {
     if (r.category) categorySet.add(r.category);
     if (r.category === "지급수수료" && r.main_account_re) feeSet.add(r.main_account_re);
+    if (r.main_account_re) mainAccountSet.add(r.main_account_re);
   }
   const catOrder = orderedUnique(categorySet, PREFERRED_CATEGORY_ORDER);
   const feeOrder = orderedUnique(feeSet, PREFERRED_FEE_ORDER);
+  // 대계정(re)은 "11 급여"처럼 앞자리 숫자가 계정 코드라 코드 순으로 정렬한다.
+  const mainAccountOrder = [...mainAccountSet].sort((a, b) => {
+    const na = parseInt(a, 10),
+      nb = parseInt(b, 10);
+    if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+    return a.localeCompare(b, "ko");
+  });
 
   function sumByHqDept(rows: Row[]): Map<string, SummaryRow> {
     const map = new Map<string, SummaryRow>();
@@ -157,6 +168,26 @@ export async function loadDashboardData(): Promise<DashboardData> {
       if (r.category === "지급수수료" && r.main_account_re)
         bud.set(r.main_account_re, (bud.get(r.main_account_re) || 0) + n(r.amount_krw));
     return feeOrder.map((a) => ({ account: a, actual: act.get(a) || 0, budget: bud.get(a) || 0 }));
+  }
+
+  function mainAccountForHq(actRows: Row[], budRows: Row[], hq: string): MainAccountRow[] {
+    const act = new Map<string, number>();
+    const bud = new Map<string, number>();
+    for (const r of actRows)
+      if (r.main_account_re && (r.hq_corp || "기타") === hq)
+        act.set(r.main_account_re, (act.get(r.main_account_re) || 0) + n(r.amount_krw));
+    for (const r of budRows)
+      if (r.main_account_re && (r.hq_corp || "기타") === hq)
+        bud.set(r.main_account_re, (bud.get(r.main_account_re) || 0) + n(r.amount_krw));
+    return mainAccountOrder
+      .filter((a) => act.has(a) || bud.has(a))
+      .map((a) => ({ account: a, actual: act.get(a) || 0, budget: bud.get(a) || 0 }));
+  }
+  function mainAccountByHqForRows(actRows: Row[], budRows: Row[]): MainAccountByHq {
+    return {
+      본사: mainAccountForHq(actRows, budRows, "본사"),
+      법인: mainAccountForHq(actRows, budRows, "법인"),
+    };
   }
 
   function evcsForRows(actRows: Row[], budRows: Row[]): EvcsBlock {
@@ -231,11 +262,13 @@ export async function loadDashboardData(): Promise<DashboardData> {
       category: categoryForRows(actM, budM),
       fee: feeForRows(actM, budM),
       evcs: evcsForRows(actM, budM),
+      mainAccountByHq: mainAccountByHqForRows(actM, budM),
       cumulative: {
         summary: summaryForRows(actCum, budCum),
         category: categoryForRows(actCum, budCum),
         fee: feeForRows(actCum, budCum),
         evcs: evcsForRows(actCum, budCum),
+        mainAccountByHq: mainAccountByHqForRows(actCum, budCum),
         label: i === 0 ? `${months[0]} (누계=당월과 동일)` : `${months[0]}~${m} 누계`,
       },
     };

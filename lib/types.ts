@@ -23,16 +23,21 @@ export type EvcsBlock = {
   certAgency: { domestic: AB; overseas: AB };
 };
 
+export type MainAccountRow = { account: string; actual: number; budget: number };
+export type MainAccountByHq = { 본사: MainAccountRow[]; 법인: MainAccountRow[] };
+
 export type MonthBlock = {
   summary: SummaryBlock;
   category: CategoryRow[];
   fee: FeeRow[];
   evcs: EvcsBlock;
+  mainAccountByHq: MainAccountByHq;
   cumulative: {
     summary: SummaryBlock;
     category: CategoryRow[];
     fee: FeeRow[];
     evcs: EvcsBlock;
+    mainAccountByHq: MainAccountByHq;
     label: string;
   };
 };

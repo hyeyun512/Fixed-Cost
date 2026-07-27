@@ -1,7 +1,7 @@
 "use client";
 
 import { Chart, registerables } from "chart.js";
-import type { DashboardData, CategoryRow, FeeRow } from "./types";
+import type { DashboardData, CategoryRow, FeeRow, MainAccountRow } from "./types";
 
 Chart.register(...registerables);
 
@@ -141,6 +141,16 @@ export function initDashboard(data: DashboardData): () => void {
       .join("");
   }
 
+  /** 실선(실적)/점선(예산)을 함께 쓰는 추이 차트용 범례. */
+  function legendLineHtml(items: { color: string; label: string; dashed?: boolean }[]): string {
+    return items
+      .map(
+        ({ color, label, dashed }) =>
+          `<span class="leg"><span class="leg-line${dashed ? " dash" : ""}" style="border-color:${color}"></span>${label}</span>`
+      )
+      .join("");
+  }
+
   function barChart(
     canvasId: string,
     labels: string[],
@@ -154,8 +164,8 @@ export function initDashboard(data: DashboardData): () => void {
       data: {
         labels,
         datasets: [
-          { label: "실적", data: actual, backgroundColor: opts.c1 || C_ACTUAL, borderRadius: 4 },
           { label: "예산", data: budget, backgroundColor: opts.c2 || C_BUDGET, borderRadius: 4 },
+          { label: "실적", data: actual, backgroundColor: opts.c1 || C_ACTUAL, borderRadius: 4 },
         ],
       },
       options: {
@@ -293,12 +303,12 @@ export function initDashboard(data: DashboardData): () => void {
     const rate = rateOf(actual, budget);
     const nameCell = hqChip ? `<span class="hq-chip ${hqChip === "본사" ? "hq" : "corp"}">${hqChip}</span>${label}` : label;
     return `<tr class="${rowClass}"><td>${nameCell}</td>
-      <td${cls(actual)}>${fmtM(actual)}</td><td${cls(budget)}>${fmtM(budget)}</td>
+      <td${cls(budget)}>${fmtM(budget)}</td><td${cls(actual)}>${fmtM(actual)}</td>
       <td${diffCls(diff)}>${diff >= 0 ? "+" : ""}${fmtM(diff)}</td>
       <td class="badge-cell">${rateBadgeCell(rate)}</td></tr>`;
   }
-  function table5(rowsHtml: string): string {
-    return `<table class="pl-tbl"><thead><tr><th>구분</th><th>실적</th><th>예산</th><th>차이</th><th>집행률</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
+  function table5(rowsHtml: string, firstColLabel = "구분"): string {
+    return `<table class="pl-tbl"><thead><tr><th>${firstColLabel}</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th></tr></thead><tbody>${rowsHtml}</tbody></table>`;
   }
 
   // ================= SUMMARY TAB =================
@@ -345,15 +355,18 @@ export function initDashboard(data: DashboardData): () => void {
       )
     );
 
-    // 신규: 계정과목별 구성비 도넛 (선택월 기준 누계 실적)
-    setText("summaryDonutSub", `1월~${currentMonth} 누계 실적 기준`);
-    const cumCats: CategoryRow[] = data.byMonth[currentMonth].cumulative.category;
+    // 계정과목별 구성비 도넛 (당월/누계 토글에 맞춰 표시)
+    setText(
+      "summaryDonutSub",
+      currentMode === "month" ? `${currentMonth} 당월 실적 기준` : `1월~${currentMonth} 누계 실적 기준`
+    );
+    const donutCats: CategoryRow[] = scope.category;
     queueChart("summary", "summaryDonutChart", () =>
       donutChart(
         "summaryDonutChart",
-        cumCats.map((c) => c.category),
-        cumCats.map((c) => c.actual),
-        cumCats.map((c, i) => colorFor(c.category, i))
+        donutCats.map((c) => c.category),
+        donutCats.map((c) => c.actual),
+        donutCats.map((c, i) => colorFor(c.category, i))
       )
     );
 
@@ -365,7 +378,7 @@ export function initDashboard(data: DashboardData): () => void {
           row("본사+법인 합계", s.total.actual, s.total.budget, "tot")
       )
     );
-    setHtml("hqLegend", legendHtml([[C_ACTUAL, "실적"], [C_BUDGET, "예산"]]));
+    setHtml("hqLegend", legendHtml([[C_BUDGET, "예산"], [C_ACTUAL, "실적"]]));
     queueChart("summary", "hqChart", () =>
       barChart(
         "hqChart",
@@ -406,7 +419,7 @@ export function initDashboard(data: DashboardData): () => void {
           row("전체 합계", cats.reduce((s, c) => s + c.actual, 0), cats.reduce((s, c) => s + c.budget, 0), "tot")
       )
     );
-    setHtml("catLegend", legendHtml([[C_ACTUAL, "실적"], [C_BUDGET, "예산"]]));
+    setHtml("catLegend", legendHtml([[C_BUDGET, "예산"], [C_ACTUAL, "실적"]]));
     queueChart("category", "categoryChart", () =>
       barChart("categoryChart", cats.map((c) => c.category), cats.map((c) => c.actual), cats.map((c) => c.budget))
     );
@@ -430,7 +443,7 @@ export function initDashboard(data: DashboardData): () => void {
           row("지급수수료 합계", fees.reduce((s, f) => s + f.actual, 0), fees.reduce((s, f) => s + f.budget, 0), "tot")
       )
     );
-    setHtml("feeLegend", legendHtml([[C_ACTUAL2, "실적"], [C_BUDGET, "예산"]]));
+    setHtml("feeLegend", legendHtml([[C_BUDGET, "예산"], [C_ACTUAL2, "실적"]]));
     queueChart("category", "feeChart", () =>
       barChart("feeChart", fees.map((f) => f.account), fees.map((f) => f.actual), fees.map((f) => f.budget), { c1: C_ACTUAL2 })
     );
@@ -472,6 +485,17 @@ export function initDashboard(data: DashboardData): () => void {
         })
       )
     );
+
+    const mainAccountTable = (rows: MainAccountRow[]): string =>
+      table5(
+        rows.map((r) => row(r.account, r.actual, r.budget)).join("") +
+          row("대계정 합계", rows.reduce((s, r) => s + r.actual, 0), rows.reduce((s, r) => s + r.budget, 0), "tot"),
+        "대계정"
+      );
+    setText("hqMainAccountTblSub", scopeLabel() + " · 백만원");
+    setHtml("hqMainAccountTable", mainAccountTable(scope.mainAccountByHq["본사"]));
+    setText("corpMainAccountTblSub", scopeLabel() + " · 백만원");
+    setHtml("corpMainAccountTable", mainAccountTable(scope.mainAccountByHq["법인"]));
   }
 
   // ================= EVCS TAB =================
@@ -507,20 +531,23 @@ export function initDashboard(data: DashboardData): () => void {
       comboChart("evcsTrendComboChart", months, evcsTrendActual, evcsTrendBudget, "#0891b2")
     );
 
-    // 신규: EVCS 계정과목별 구성비 도넛 (선택월 기준 누계, 국내+해외 합산)
-    setText("evcsDonutSub", `1월~${currentMonth} 누계 실적 기준`);
-    const cumEvcsCats = data.byMonth[currentMonth].cumulative.evcs.byCategory;
+    // EVCS 계정과목별 구성비 도넛 (당월/누계 토글에 맞춰 표시, 국내+해외 합산)
+    setText(
+      "evcsDonutSub",
+      currentMode === "month" ? `${currentMonth} 당월 실적 기준` : `1월~${currentMonth} 누계 실적 기준`
+    );
+    const donutEvcsCats = e.byCategory;
     queueChart("evcs", "evcsDonutChart", () =>
       donutChart(
         "evcsDonutChart",
-        cumEvcsCats.map((c) => c.category),
-        cumEvcsCats.map((c) => c.dom_actual + c.ovs_actual),
-        cumEvcsCats.map((c, i) => colorFor(c.category, i))
+        donutEvcsCats.map((c) => c.category),
+        donutEvcsCats.map((c) => c.dom_actual + c.ovs_actual),
+        donutEvcsCats.map((c, i) => colorFor(c.category, i))
       )
     );
 
     setHtml("evcsSummaryTable", table5(row("국내", domA, domB) + row("해외", ovsA, ovsB) + row("국내+해외 합계", totA, totB, "tot")));
-    setHtml("evcsLegend", legendHtml([[C_ACTUAL, "실적"], [C_BUDGET, "예산"]]));
+    setHtml("evcsLegend", legendHtml([[C_BUDGET, "예산"], [C_ACTUAL, "실적"]]));
     queueChart("evcs", "evcsChart", () => barChart("evcsChart", ["국내", "해외"], [domA, ovsA], [domB, ovsB]));
 
     const domRate = rateOf(domA, domB),
@@ -533,23 +560,31 @@ export function initDashboard(data: DashboardData): () => void {
     }
     setHtml("evcsInsight", `<div class="callout info"><div class="ic">🔋</div><div>${insightMsg}</div></div>`);
 
-    setHtml("evcsTrendLegend", legendHtml([["#0891b2", "국내 실적"], ["#0f172a", "해외 실적"]]));
+    setHtml(
+      "evcsTrendLegend",
+      legendLineHtml([
+        { color: "#0891b2", label: "국내 예산", dashed: true },
+        { color: "#0891b2", label: "국내 실적" },
+        { color: "#0f172a", label: "해외 예산", dashed: true },
+        { color: "#0f172a", label: "해외 실적" },
+      ])
+    );
     queueChart("evcs", "evcsTrendChart", () =>
       lineChartMulti("evcsTrendChart", months, [
-        { label: "국내 실적", data: trend.evcs_domestic.map((x) => x.actual), borderColor: "#0891b2", backgroundColor: "#0891b2", tension: 0.3 },
         { label: "국내 예산", data: trend.evcs_domestic.map((x) => x.budget), borderColor: "#0891b2", borderDash: [5, 4], backgroundColor: "#0891b2", tension: 0.3, pointRadius: 2 },
-        { label: "해외 실적", data: trend.evcs_overseas.map((x) => x.actual), borderColor: "#0f172a", backgroundColor: "#0f172a", tension: 0.3 },
+        { label: "국내 실적", data: trend.evcs_domestic.map((x) => x.actual), borderColor: "#0891b2", backgroundColor: "#0891b2", tension: 0.3 },
         { label: "해외 예산", data: trend.evcs_overseas.map((x) => x.budget), borderColor: "#0f172a", borderDash: [5, 4], backgroundColor: "#0f172a", tension: 0.3, pointRadius: 2 },
+        { label: "해외 실적", data: trend.evcs_overseas.map((x) => x.actual), borderColor: "#0f172a", backgroundColor: "#0f172a", tension: 0.3 },
       ])
     );
 
-    let catHtml = `<table class="pl-tbl"><thead><tr><th>구분</th><th>국내 실적</th><th>국내 예산</th><th>국내 집행률</th><th>해외 실적</th><th>해외 예산</th><th>해외 집행률</th></tr></thead><tbody>`;
+    let catHtml = `<table class="pl-tbl"><thead><tr><th>구분</th><th>국내 예산</th><th>국내 실적</th><th>국내 집행률</th><th>해외 예산</th><th>해외 실적</th><th>해외 집행률</th></tr></thead><tbody>`;
     e.byCategory.forEach((c) => {
       const dr = rateOf(c.dom_actual, c.dom_budget);
       const or_ = rateOf(c.ovs_actual, c.ovs_budget);
       catHtml += `<tr><td>${c.category}</td>
-        <td${cls(c.dom_actual)}>${fmtM(c.dom_actual)}</td><td${cls(c.dom_budget)}>${fmtM(c.dom_budget)}</td><td class="badge-cell">${rateBadgeCell(dr)}</td>
-        <td${cls(c.ovs_actual)}>${fmtM(c.ovs_actual)}</td><td${cls(c.ovs_budget)}>${fmtM(c.ovs_budget)}</td><td class="badge-cell">${rateBadgeCell(or_)}</td></tr>`;
+        <td${cls(c.dom_budget)}>${fmtM(c.dom_budget)}</td><td${cls(c.dom_actual)}>${fmtM(c.dom_actual)}</td><td class="badge-cell">${rateBadgeCell(dr)}</td>
+        <td${cls(c.ovs_budget)}>${fmtM(c.ovs_budget)}</td><td${cls(c.ovs_actual)}>${fmtM(c.ovs_actual)}</td><td class="badge-cell">${rateBadgeCell(or_)}</td></tr>`;
     });
     catHtml += "</tbody></table>";
     setHtml("evcsCatTable", catHtml);
@@ -562,7 +597,7 @@ export function initDashboard(data: DashboardData): () => void {
       certTotB = cd.budget + co.budget;
 
     setHtml("certTable", table5(row("국내", cd.actual, cd.budget) + row("해외", co.actual, co.budget) + row("합계", certTotA, certTotB, "tot")));
-    setHtml("certLegend", legendHtml([[C_ALT, "실적"], ["#fca5a5", "예산"]]));
+    setHtml("certLegend", legendHtml([["#fca5a5", "예산"], [C_ALT, "실적"]]));
     queueChart("evcs", "certChart", () => barChart("certChart", ["국내", "해외"], [cd.actual, co.actual], [cd.budget, co.budget], { c1: C_ALT, c2: "#fca5a5" }));
 
     const riskyDom = cdRate !== null && (cdRate === Infinity || cdRate > 130);
@@ -583,13 +618,21 @@ export function initDashboard(data: DashboardData): () => void {
       );
     }
 
-    setHtml("certTrendLegend", legendHtml([[C_ALT, "국내 실적"], [C_ALT2, "해외 실적"]]));
+    setHtml(
+      "certTrendLegend",
+      legendLineHtml([
+        { color: C_ALT, label: "국내 예산", dashed: true },
+        { color: C_ALT, label: "국내 실적" },
+        { color: C_ALT2, label: "해외 예산", dashed: true },
+        { color: C_ALT2, label: "해외 실적" },
+      ])
+    );
     queueChart("evcs", "certTrendChart", () =>
       lineChartMulti("certTrendChart", months, [
-        { label: "국내 실적", data: trend.cert_domestic.map((x) => x.actual), borderColor: C_ALT, backgroundColor: C_ALT, tension: 0.3 },
         { label: "국내 예산", data: trend.cert_domestic.map((x) => x.budget), borderColor: C_ALT, borderDash: [5, 4], backgroundColor: C_ALT, tension: 0.3, pointRadius: 2 },
-        { label: "해외 실적", data: trend.cert_overseas.map((x) => x.actual), borderColor: C_ALT2, backgroundColor: C_ALT2, tension: 0.3 },
+        { label: "국내 실적", data: trend.cert_domestic.map((x) => x.actual), borderColor: C_ALT, backgroundColor: C_ALT, tension: 0.3 },
         { label: "해외 예산", data: trend.cert_overseas.map((x) => x.budget), borderColor: C_ALT2, borderDash: [5, 4], backgroundColor: C_ALT2, tension: 0.3, pointRadius: 2 },
+        { label: "해외 실적", data: trend.cert_overseas.map((x) => x.actual), borderColor: C_ALT2, backgroundColor: C_ALT2, tension: 0.3 },
       ])
     );
   }
