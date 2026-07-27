@@ -10,6 +10,7 @@ import type {
   EvcsCatRow,
   Trend,
   TrendPoint,
+  FullTrendPoint,
   MainAccountRow,
   MainAccountByHq,
 } from "./types";
@@ -88,6 +89,9 @@ export async function loadDashboardData(): Promise<DashboardData> {
   const defaultMonth = months[months.length - 1];
 
   const budgetRows = await fetchAllRows(BUDGET_TABLE, months);
+  // 예산은 연간 전체(1~12월)가 미리 잡혀 있는 경우가 많아, 미경과 기간 예산선 표시를 위해 전체를 따로 받아둔다.
+  const budgetRowsFullYear = await fetchAllRows(BUDGET_TABLE);
+  const allMonths = [...new Set(budgetRowsFullYear.map((r) => r.month))].sort((a, b) => monthNum(a) - monthNum(b));
 
   const categorySet = new Set<string>();
   const feeSet = new Set<string>();
@@ -173,15 +177,36 @@ export async function loadDashboardData(): Promise<DashboardData> {
   function mainAccountForHq(actRows: Row[], budRows: Row[], hq: string): MainAccountRow[] {
     const act = new Map<string, number>();
     const bud = new Map<string, number>();
-    for (const r of actRows)
-      if (r.main_account_re && (r.hq_corp || "기타") === hq)
-        act.set(r.main_account_re, (act.get(r.main_account_re) || 0) + n(r.amount_krw));
-    for (const r of budRows)
-      if (r.main_account_re && (r.hq_corp || "기타") === hq)
-        bud.set(r.main_account_re, (bud.get(r.main_account_re) || 0) + n(r.amount_krw));
+    // 대계정별로 어느 구분(부서)이 실적/예산을 냈는지도 함께 쌓아둔다 (비고란의 원인 부서 표기용).
+    const actByDept = new Map<string, Map<string, number>>();
+    const budByDept = new Map<string, Map<string, number>>();
+    for (const r of actRows) {
+      if (!r.main_account_re || (r.hq_corp || "기타") !== hq) continue;
+      act.set(r.main_account_re, (act.get(r.main_account_re) || 0) + n(r.amount_krw));
+      const dept = r.report_use_re || "미분류";
+      const dm = actByDept.get(r.main_account_re) || new Map<string, number>();
+      dm.set(dept, (dm.get(dept) || 0) + n(r.amount_krw));
+      actByDept.set(r.main_account_re, dm);
+    }
+    for (const r of budRows) {
+      if (!r.main_account_re || (r.hq_corp || "기타") !== hq) continue;
+      bud.set(r.main_account_re, (bud.get(r.main_account_re) || 0) + n(r.amount_krw));
+      const dept = r.report_use_re || "미분류";
+      const dm = budByDept.get(r.main_account_re) || new Map<string, number>();
+      dm.set(dept, (dm.get(dept) || 0) + n(r.amount_krw));
+      budByDept.set(r.main_account_re, dm);
+    }
     return mainAccountOrder
       .filter((a) => act.has(a) || bud.has(a))
-      .map((a) => ({ account: a, actual: act.get(a) || 0, budget: bud.get(a) || 0 }));
+      .map((a) => {
+        const depts = new Set<string>([...(actByDept.get(a)?.keys() || []), ...(budByDept.get(a)?.keys() || [])]);
+        const byDept = [...depts].map((dept) => ({
+          dept,
+          actual: actByDept.get(a)?.get(dept) || 0,
+          budget: budByDept.get(a)?.get(dept) || 0,
+        }));
+        return { account: a, actual: act.get(a) || 0, budget: bud.get(a) || 0, byDept };
+      });
   }
   function mainAccountByHqForRows(actRows: Row[], budRows: Row[]): MainAccountByHq {
     return {
@@ -301,10 +326,62 @@ export async function loadDashboardData(): Promise<DashboardData> {
         }),
       ])
     ),
+    ...buildFullYearTrend(),
   };
+
+  // 미경과 기간(예: 6월 실적까지 있고 12월까지 예산이 잡혀있는 경우) 예산선을 12월까지 그리기 위한 전체 연간 집계.
+  // 실적은 실제 데이터가 있는 달까지만 채우고, 그 이후는 null로 두어 차트에서 끊어진 상태로 표시한다.
+  function buildFullYearTrend(): Pick<Trend, "cert_domestic_full" | "cert_overseas_full" | "fee_by_account_full"> {
+    const monthsWithActual = new Set(months);
+    const certBudget = new Map<string, { dom: number; ovs: number }>();
+    const feeBudget = new Map<string, Map<string, number>>();
+    for (const r of budgetRowsFullYear) {
+      if (r.main_account_re === "41 인증대행료") {
+        const cur = certBudget.get(r.month) || { dom: 0, ovs: 0 };
+        cur.dom += n(r.evcs_domestic_krw);
+        cur.ovs += n(r.evcs_overseas_krw);
+        certBudget.set(r.month, cur);
+      }
+      if (r.category === "지급수수료" && r.main_account_re) {
+        const dm = feeBudget.get(r.month) || new Map<string, number>();
+        dm.set(r.main_account_re, (dm.get(r.main_account_re) || 0) + n(r.amount_krw));
+        feeBudget.set(r.month, dm);
+      }
+    }
+    const fullPoint = (m: string, actual: number | null, budget: number): FullTrendPoint => ({ month: m, actual, budget });
+    const cert_domestic_full = allMonths.map((m) =>
+      fullPoint(
+        m,
+        monthsWithActual.has(m) ? byMonth[m].evcs.certAgency.domestic.actual : null,
+        certBudget.get(m)?.dom || 0
+      )
+    );
+    const cert_overseas_full = allMonths.map((m) =>
+      fullPoint(
+        m,
+        monthsWithActual.has(m) ? byMonth[m].evcs.certAgency.overseas.actual : null,
+        certBudget.get(m)?.ovs || 0
+      )
+    );
+    const fee_by_account_full = Object.fromEntries(
+      feeOrder.map((acc) => [
+        acc,
+        allMonths.map((m) => {
+          const actualRow = monthsWithActual.has(m) ? byMonth[m].fee.find((f) => f.account === acc) : undefined;
+          return fullPoint(
+            m,
+            monthsWithActual.has(m) ? actualRow?.actual || 0 : null,
+            feeBudget.get(m)?.get(acc) || 0
+          );
+        }),
+      ])
+    );
+    return { cert_domestic_full, cert_overseas_full, fee_by_account_full };
+  }
 
   return {
     months,
+    allMonths,
     defaultMonth,
     generatedAt: new Date().toISOString(),
     sourceTable: actualTable,

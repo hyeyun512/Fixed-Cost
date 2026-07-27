@@ -191,7 +191,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           <div className="panel-hd">
             <div>
               <div className="panel-title">지급수수료 주요 계정 추이</div>
-              <div className="panel-sub">1월~당월 · 백만원</div>
+              <div className="panel-sub">예산 1월~12월 · 실적 1월~당월 · 백만원</div>
             </div>
             <div className="legend" id="feeTrendLegend" />
           </div>
@@ -201,7 +201,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         </div>
 
         <div className="section-lead">
-          대계정(re)별 상세<span className="sub">본사 · 법인 각각 전체 대계정 기준 실적/예산</span>
+          대계정별 상세<span className="sub">본사 · 법인 각각 전체 대계정 기준 실적/예산</span>
         </div>
         <div className="chart-2col">
           <div className="tbl-box" style={{ marginBottom: 0 }}>
@@ -328,11 +328,38 @@ export default function Dashboard({ data }: { data: DashboardData }) {
             </div>
           </div>
         </div>
+        <div className="panel" style={{ marginBottom: 16 }}>
+          <div className="panel-hd">
+            <div>
+              <div className="panel-title">인증대행료 월별 예산·실적·집행률</div>
+              <div className="panel-sub" id="certComboSub">
+                &nbsp;
+              </div>
+            </div>
+            <div className="legend">
+              <span className="leg">
+                <span className="leg-dot" style={{ background: "#16a34a" }} />
+                집행률(%)
+              </span>
+              <span className="leg">
+                <span className="leg-dot" style={{ background: "#cbd5e1" }} />
+                예산
+              </span>
+              <span className="leg">
+                <span className="leg-dot" style={{ background: "#dc2626" }} />
+                실적
+              </span>
+            </div>
+          </div>
+          <div className="chart-wrap-lg">
+            <canvas id="certComboChart" />
+          </div>
+        </div>
         <div className="panel">
           <div className="panel-hd">
             <div>
               <div className="panel-title">인증대행료 추이</div>
-              <div className="panel-sub">1월~당월 · 백만원</div>
+              <div className="panel-sub">예산 1월~12월 · 실적 1월~당월 · 백만원</div>
             </div>
             <div className="legend" id="certTrendLegend" />
           </div>

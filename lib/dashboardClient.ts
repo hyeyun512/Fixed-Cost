@@ -31,9 +31,12 @@ const C_ALT2 = "#f59e0b";
 
 export function initDashboard(data: DashboardData): () => void {
   const months = data.months;
+  const allMonths = data.allMonths;
   const trend = data.trend;
   let currentMonth = data.defaultMonth;
   let currentMode: "month" | "cum" = "month";
+  // allMonths 기준으로, 실적이 존재하는 마지막 달의 인덱스. 이후 구간이 "미경과 기간".
+  const lastActualIdx = allMonths.indexOf(months[months.length - 1]);
 
   const fmtM = (nVal: number) => Math.round(nVal / 1e6).toLocaleString("ko-KR");
   const cls = (v: number) => (v < 0 ? ' class="neg"' : "");
@@ -237,21 +240,49 @@ export function initDashboard(data: DashboardData): () => void {
     return new Chart(canvas, config);
   }
 
-  function lineChartMulti(canvasId: string, labels: string[], datasets: any[]): AnyChart {
+  function lineChartMulti(canvasId: string, labels: string[], datasets: any[], extraPlugins: any[] = []): AnyChart {
     const canvas = el(canvasId) as HTMLCanvasElement;
     return new Chart(canvas, {
       type: "line",
       data: { labels, datasets },
+      plugins: extraPlugins,
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: (ctx) => ctx.dataset.label + ": " + fmtM(ctx.parsed.y as number) + "백만원" } },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const v = ctx.parsed.y as number | null;
+                return ctx.dataset.label + ": " + (v == null ? "-" : fmtM(v) + "백만원");
+              },
+            },
+          },
         },
         scales: { y: { ticks: { callback: (v) => fmtM(v as number) }, grid: { color: "#f1f5f9" } }, x: { grid: { display: false } } },
       },
     });
+  }
+
+  /** 아직 실적이 집계되지 않은 "미경과 기간" 구간을 연한 회색으로 칠하는 차트 플러그인. */
+  function futureShadePlugin(cutoffIndex: number) {
+    return {
+      id: "futureShade",
+      beforeDraw(chart: any) {
+        if (cutoffIndex < 0) return;
+        const { ctx, chartArea, scales } = chart;
+        const xScale = scales.x;
+        if (!xScale || !chartArea) return;
+        const startX = Math.max(xScale.getPixelForValue(cutoffIndex + 0.5), chartArea.left);
+        const endX = chartArea.right;
+        if (startX >= endX) return;
+        ctx.save();
+        ctx.fillStyle = "rgba(148,163,184,0.18)";
+        ctx.fillRect(startX, chartArea.top, endX - startX, chartArea.bottom - chartArea.top);
+        ctx.restore();
+      },
+    };
   }
 
   /** 예산/실적 막대 + 집행률(%) 라인을 함께 보여주는 콤보 차트 (이중 y축). */
@@ -480,6 +511,7 @@ export function initDashboard(data: DashboardData): () => void {
   function renderCategory() {
     CHART_BUILDERS["category"] = [];
     const scope = getScope();
+    const s = scope.summary;
     const cats = scope.category;
     const fees = scope.fee;
     setText("catTblSub", scopeLabel() + " · 백만원");
@@ -541,35 +573,90 @@ export function initDashboard(data: DashboardData): () => void {
 
     const feeAccounts = fees.map((f) => f.account);
     const palette = ["#2563eb", "#0f172a", "#dc2626", "#d97706", "#16a34a", "#7c3aed"];
-    setHtml("feeTrendLegend", legendHtml(feeAccounts.map((a, i) => [palette[i % palette.length], a])));
+    setHtml(
+      "feeTrendLegend",
+      legendLineHtml(
+        feeAccounts.flatMap((a, i) => [
+          { color: palette[i % palette.length], label: `${a} 예산`, dashed: true },
+          { color: palette[i % palette.length], label: `${a} 실적` },
+        ])
+      ) + `<span class="leg"><span class="leg-dot" style="background:#94a3b8"></span>미경과 기간</span>`
+    );
     queueChart("category", "feeTrendChart", () =>
       lineChartMulti(
         "feeTrendChart",
-        months,
-        feeAccounts.map((acc, i) => {
-          const series = trend.fee_by_account[acc] || [];
-          return {
-            label: acc,
-            data: series.map((x) => x.actual),
-            borderColor: palette[i % palette.length],
-            backgroundColor: palette[i % palette.length],
-            tension: 0.3,
-            pointRadius: 3,
-          };
-        })
+        allMonths,
+        feeAccounts.flatMap((acc, i) => {
+          const series = trend.fee_by_account_full[acc] || [];
+          const color = palette[i % palette.length];
+          return [
+            {
+              label: `${acc} 예산`,
+              data: series.map((x) => x.budget),
+              borderColor: color,
+              borderDash: [5, 4],
+              backgroundColor: color,
+              tension: 0.3,
+              pointRadius: 2,
+            },
+            {
+              label: `${acc} 실적`,
+              data: series.map((x) => x.actual),
+              borderColor: color,
+              backgroundColor: color,
+              tension: 0.3,
+              pointRadius: 3,
+            },
+          ];
+        }),
+        [futureShadePlugin(lastActualIdx)]
       )
     );
 
-    const mainAccountTable = (rows: MainAccountRow[]): string =>
-      table5(
-        rows.map((r) => row(r.account, r.actual, r.budget)).join("") +
-          row("대계정 합계", rows.reduce((s, r) => s + r.actual, 0), rows.reduce((s, r) => s + r.budget, 0), "tot"),
-        "대계정"
-      );
+    // 집행률 괴리와 금액이 둘 다 유의미할 때만, 원인이 되는 구분(부서) 1~2개를 "구분 +차이금액"으로 뽑는다.
+    const mainAccountRemark = (r: MainAccountRow, hqTotalBudget: number): string => {
+      const rate = rateOf(r.actual, r.budget);
+      const diff = r.actual - r.budget;
+      if (rate === null || diff === 0) return "";
+      const rateOff = rate === Infinity ? Infinity : Math.abs(rate - 100);
+      const scaleRatio = hqTotalBudget > 0 ? Math.abs(diff) / hqTotalBudget : 0;
+      // 집행률 20%p 이상 괴리 + 해당 본부/법인 전체 예산의 3% 이상 규모일 때만 "유의미"로 판단
+      if (!(rateOff >= 20 && scaleRatio >= 0.03)) return "";
+      const sign = diff > 0 ? 1 : -1;
+      const contributors = r.byDept
+        .map((d) => ({ dept: d.dept, diff: d.actual - d.budget }))
+        .filter((d) => Math.sign(d.diff) === sign)
+        .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
+        .slice(0, 2);
+      if (!contributors.length) return "";
+      return contributors.map((d) => `${d.dept} ${d.diff >= 0 ? "+" : ""}${fmtM(d.diff)}백만원`).join(", ");
+    };
+
+    const mainAccountTable = (rows: MainAccountRow[], hqTotalBudget: number): string => {
+      const bodyRows = rows
+        .map((r) => {
+          const diff = r.actual - r.budget;
+          return `<tr><td>${r.account}</td>
+            <td${cls(r.budget)}>${fmtM(r.budget)}</td><td${cls(r.actual)}>${fmtM(r.actual)}</td>
+            <td${diffCls(diff)}>${diff >= 0 ? "+" : ""}${fmtM(diff)}</td>
+            <td class="badge-cell">${rateBadgeCell(rateOf(r.actual, r.budget))}</td>
+            <td class="remark-cell">${mainAccountRemark(r, hqTotalBudget)}</td></tr>`;
+        })
+        .join("");
+      const totA = rows.reduce((sum, r) => sum + r.actual, 0);
+      const totB = rows.reduce((sum, r) => sum + r.budget, 0);
+      const totDiff = totA - totB;
+      const totRow = `<tr class="tot"><td>대계정 합계</td>
+        <td>${fmtM(totB)}</td><td>${fmtM(totA)}</td>
+        <td${diffCls(totDiff)}>${totDiff >= 0 ? "+" : ""}${fmtM(totDiff)}</td>
+        <td class="badge-cell">${rateBadgeCell(rateOf(totA, totB))}</td>
+        <td></td></tr>`;
+      return `<table class="pl-tbl"><thead><tr><th>대계정</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th><th>비고</th></tr></thead><tbody>${bodyRows}${totRow}</tbody></table>`;
+    };
     setText("hqMainAccountTblSub", scopeLabel() + " · 백만원");
-    setHtml("hqMainAccountTable", mainAccountTable(scope.mainAccountByHq["본사"]));
+    setHtml("hqMainAccountTable", mainAccountTable(scope.mainAccountByHq["본사"], s.hq_totals["본사"].budget));
     setText("corpMainAccountTblSub", scopeLabel() + " · 백만원");
-    setHtml("corpMainAccountTable", mainAccountTable(scope.mainAccountByHq["법인"]));
+    setHtml("corpMainAccountTable", mainAccountTable(scope.mainAccountByHq["법인"], s.hq_totals["법인"].budget));
   }
 
   // ================= EVCS TAB =================
@@ -666,13 +753,17 @@ export function initDashboard(data: DashboardData): () => void {
       ])
     );
 
-    let catHtml = `<table class="pl-tbl"><thead><tr><th>구분</th><th>국내 예산</th><th>국내 실적</th><th>국내 집행률</th><th>해외 예산</th><th>해외 실적</th><th>해외 집행률</th></tr></thead><tbody>`;
+    let catHtml = `<table class="pl-tbl"><thead><tr><th>구분</th><th>국내 예산</th><th>국내 실적</th><th>국내 차이</th><th>국내 집행률</th><th>해외 예산</th><th>해외 실적</th><th>해외 차이</th><th>해외 집행률</th></tr></thead><tbody>`;
     e.byCategory.forEach((c) => {
       const dr = rateOf(c.dom_actual, c.dom_budget);
       const or_ = rateOf(c.ovs_actual, c.ovs_budget);
+      const domDiff = c.dom_actual - c.dom_budget;
+      const ovsDiff = c.ovs_actual - c.ovs_budget;
       catHtml += `<tr><td>${c.category}</td>
-        <td${cls(c.dom_budget)}>${fmtM(c.dom_budget)}</td><td${cls(c.dom_actual)}>${fmtM(c.dom_actual)}</td><td class="badge-cell">${rateBadgeCell(dr)}</td>
-        <td${cls(c.ovs_budget)}>${fmtM(c.ovs_budget)}</td><td${cls(c.ovs_actual)}>${fmtM(c.ovs_actual)}</td><td class="badge-cell">${rateBadgeCell(or_)}</td></tr>`;
+        <td${cls(c.dom_budget)}>${fmtM(c.dom_budget)}</td><td${cls(c.dom_actual)}>${fmtM(c.dom_actual)}</td>
+        <td${diffCls(domDiff)}>${domDiff >= 0 ? "+" : ""}${fmtM(domDiff)}</td><td class="badge-cell">${rateBadgeCell(dr)}</td>
+        <td${cls(c.ovs_budget)}>${fmtM(c.ovs_budget)}</td><td${cls(c.ovs_actual)}>${fmtM(c.ovs_actual)}</td>
+        <td${diffCls(ovsDiff)}>${ovsDiff >= 0 ? "+" : ""}${fmtM(ovsDiff)}</td><td class="badge-cell">${rateBadgeCell(or_)}</td></tr>`;
     });
     catHtml += "</tbody></table>";
     setHtml("evcsCatTable", catHtml);
@@ -706,6 +797,12 @@ export function initDashboard(data: DashboardData): () => void {
       );
     }
 
+    // 인증대행료 월별 예산·실적·집행률 콤보 차트 (국내+해외 합산, 신규)
+    setText("certComboSub", `1월~${months[months.length - 1]} 당월 기준, 인증대행료(국내+해외)`);
+    const certComboActual = months.map((_, i) => trend.cert_domestic[i].actual + trend.cert_overseas[i].actual);
+    const certComboBudget = months.map((_, i) => trend.cert_domestic[i].budget + trend.cert_overseas[i].budget);
+    queueChart("evcs", "certComboChart", () => comboChart("certComboChart", months, certComboActual, certComboBudget, C_ALT));
+
     setHtml(
       "certTrendLegend",
       legendLineHtml([
@@ -713,15 +810,20 @@ export function initDashboard(data: DashboardData): () => void {
         { color: C_ALT, label: "국내 실적" },
         { color: C_ALT2, label: "해외 예산", dashed: true },
         { color: C_ALT2, label: "해외 실적" },
-      ])
+      ]) + `<span class="leg"><span class="leg-dot" style="background:#94a3b8"></span>미경과 기간</span>`
     );
     queueChart("evcs", "certTrendChart", () =>
-      lineChartMulti("certTrendChart", months, [
-        { label: "국내 예산", data: trend.cert_domestic.map((x) => x.budget), borderColor: C_ALT, borderDash: [5, 4], backgroundColor: C_ALT, tension: 0.3, pointRadius: 2 },
-        { label: "국내 실적", data: trend.cert_domestic.map((x) => x.actual), borderColor: C_ALT, backgroundColor: C_ALT, tension: 0.3 },
-        { label: "해외 예산", data: trend.cert_overseas.map((x) => x.budget), borderColor: C_ALT2, borderDash: [5, 4], backgroundColor: C_ALT2, tension: 0.3, pointRadius: 2 },
-        { label: "해외 실적", data: trend.cert_overseas.map((x) => x.actual), borderColor: C_ALT2, backgroundColor: C_ALT2, tension: 0.3 },
-      ])
+      lineChartMulti(
+        "certTrendChart",
+        allMonths,
+        [
+          { label: "국내 예산", data: trend.cert_domestic_full.map((x) => x.budget), borderColor: C_ALT, borderDash: [5, 4], backgroundColor: C_ALT, tension: 0.3, pointRadius: 2 },
+          { label: "국내 실적", data: trend.cert_domestic_full.map((x) => x.actual), borderColor: C_ALT, backgroundColor: C_ALT, tension: 0.3 },
+          { label: "해외 예산", data: trend.cert_overseas_full.map((x) => x.budget), borderColor: C_ALT2, borderDash: [5, 4], backgroundColor: C_ALT2, tension: 0.3, pointRadius: 2 },
+          { label: "해외 실적", data: trend.cert_overseas_full.map((x) => x.actual), borderColor: C_ALT2, backgroundColor: C_ALT2, tension: 0.3 },
+        ],
+        [futureShadePlugin(lastActualIdx)]
+      )
     );
   }
 

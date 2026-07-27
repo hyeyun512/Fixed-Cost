@@ -23,7 +23,8 @@ export type EvcsBlock = {
   certAgency: { domestic: AB; overseas: AB };
 };
 
-export type MainAccountRow = { account: string; actual: number; budget: number };
+export type MainAccountDeptRow = { dept: string; actual: number; budget: number };
+export type MainAccountRow = { account: string; actual: number; budget: number; byDept: MainAccountDeptRow[] };
 export type MainAccountByHq = { 본사: MainAccountRow[]; 법인: MainAccountRow[] };
 
 export type MonthBlock = {
@@ -43,6 +44,8 @@ export type MonthBlock = {
 };
 
 export type TrendPoint = { month: string; actual: number; budget: number };
+/** 실적이 아직 없는(미경과) 월은 actual이 null — 차트에서 끊어진 상태로 표시하기 위함. */
+export type FullTrendPoint = { month: string; actual: number | null; budget: number };
 export type Trend = {
   months: string[];
   summary_total: TrendPoint[];
@@ -51,10 +54,16 @@ export type Trend = {
   cert_domestic: TrendPoint[];
   cert_overseas: TrendPoint[];
   fee_by_account: Record<string, TrendPoint[]>;
+  /** 예산은 연말(12월)까지, 실적은 당월까지만 채워진 전체 연간 추이 (미경과 기간 표시용). */
+  cert_domestic_full: FullTrendPoint[];
+  cert_overseas_full: FullTrendPoint[];
+  fee_by_account_full: Record<string, FullTrendPoint[]>;
 };
 
 export type DashboardData = {
   months: string[];
+  /** 예산 테이블 기준 연간 전체 월 목록 (1월~12월, 미경과 기간 포함). */
+  allMonths: string[];
   defaultMonth: string;
   generatedAt: string;
   sourceTable: string;
