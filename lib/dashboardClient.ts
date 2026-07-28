@@ -179,8 +179,9 @@ export function initDashboard(data: DashboardData): () => void {
     return `<b>${scopeLabel} 전사 실적</b> — ${overallText}. ${sentences.join(" ")}`;
   }
   /**
-   * 조직별 지급수수료 현황 표 위에 붙는 요약 코멘트. 전체 집행률을 먼저 밝히고, 그 아래에서
-   * 예산 대비 가장 크게 미달/초과된 조직을 각각 하나씩(있는 경우만) 짚어준다.
+   * 조직별 지급수수료 현황 표 위에 붙는 요약 코멘트. 전체 집행률을 먼저 밝히고, 예산 대비 유의미하게
+   * 미달/초과된 조직을 방향별로 모두 나열한다 (하나씩만 뽑으면 언급된 금액 합이 전체 차이 금액과
+   * 크게 어긋나므로, 임계값 이상인 조직은 빠짐없이 실어 "언급된 금액 합 ≈ 전체 차이"에 가깝게 만든다).
    * Staff부문은 자체 합계 대신 그 하위 대조직(예: "Staff부문의 경영지원실")으로 표기해 더 구체적으로 알려준다.
    */
   function feeOrgSummary(scopeLbl: string, rows: FeeOrgRow[]): string {
@@ -202,18 +203,21 @@ export function initDashboard(data: DashboardData): () => void {
       .map((r) => ({ label: r.level === 1 ? `Staff부문의 ${r.org}` : stripDeptNumber(r.org), diff: r.actual - r.budget }))
       .filter((l) => Math.abs(l.diff) >= REMARK_MIN_DIFF_WON);
 
-    const topOver = leaves.filter((l) => l.diff > 0).sort((a, b) => b.diff - a.diff)[0];
-    const topUnder = leaves.filter((l) => l.diff < 0).sort((a, b) => a.diff - b.diff)[0];
+    const unders = leaves.filter((l) => l.diff < 0).sort((a, b) => a.diff - b.diff);
+    const overs = leaves.filter((l) => l.diff > 0).sort((a, b) => b.diff - a.diff);
 
-    const parts: string[] = [];
-    if (topUnder) parts.push(`<b>${topUnder.label}</b>에서 ${fmtM(topUnder.diff)}백만원 미달되었고`);
-    if (topOver) parts.push(`<b>${topOver.label}</b>에서 +${fmtM(topOver.diff)}백만원 초과집행되었습니다`);
-
-    if (!parts.length) {
+    if (!unders.length && !overs.length) {
       return `<b>${scopeLbl} 지급수수료 현황</b> — ${overallText}. 조직별로도 예산 범위 내에서 안정적으로 관리되고 있습니다.`;
     }
-    const tail = parts.length === 2 ? parts.join(", ") : parts[0].replace(/되었고$/, "되었습니다");
-    return `<b>${scopeLbl} 지급수수료 현황</b> — ${overallText}, ${tail}.`;
+    const fmtList = (list: { label: string; diff: number }[]) =>
+      list.map((l) => `${l.label}(${l.diff >= 0 ? "+" : ""}${fmtM(l.diff)}백만원)`).join(", ");
+
+    const clauses: string[] = [];
+    if (unders.length) clauses.push(`미달 원인은 ${fmtList(unders)}이며`);
+    if (overs.length) clauses.push(`초과 원인은 ${fmtList(overs)}입니다`);
+    const tail = clauses.length === 2 ? clauses.join(", ") : clauses[0].replace(/이며$/, "입니다");
+
+    return `<b>${scopeLbl} 지급수수료 현황</b> — ${overallText}. ${tail}.`;
   }
   /** 전월 대비 증감 배지 (당월 보기에서만 의미가 있음). */
   function momBadgeHtml(current: number, previous: number | null): string {
@@ -694,7 +698,6 @@ export function initDashboard(data: DashboardData): () => void {
     const s = scope.summary;
     const cats = scope.category;
     const catHq = scope.categoryByHq;
-    const fees = scope.fee;
     setText("catTblSub", scopeLabel() + " · 백만원");
 
     // 구분별 상세: 구분마다 총합계/본사/법인을 각각 예산·실적·차이·집행률 4열씩 나란히(병렬) 배치해
@@ -755,22 +758,6 @@ export function initDashboard(data: DashboardData): () => void {
         "비고"
       )
     );
-    const cert = fees.find((f) => f.account.includes("인증대행료"));
-    if (cert) {
-      const certRate = rateOf(cert.actual, cert.budget);
-      if (certRate !== null && (certRate > 130 || certRate === Infinity)) {
-        setHtml(
-          "feeInsight",
-          `<div class="callout alert"><div class="ic">⚠️</div>
-            <div><b>인증대행료 집행률 ${badgeLabel(certRate)}</b> — 예산(${fmtM(cert.budget)}백만원) 대비 실적(${fmtM(cert.actual)}백만원)이 크게 초과되었습니다. 원인 확인이 필요합니다.</div></div>`
-        );
-      } else {
-        setHtml(
-          "feeInsight",
-          `<div class="callout info"><div class="ic">✅</div><div><b>인증대행료</b> 집행률 ${badgeLabel(certRate)} — 예산 대비 안정적으로 관리되고 있습니다.</div></div>`
-        );
-      }
-    }
   }
 
   // ================= EVCS TAB =================

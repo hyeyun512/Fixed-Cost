@@ -190,7 +190,6 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           지급수수료 상세 관리<span className="sub">주요 계정 기준 · 어디서 더 쓰고 덜 쓰는지 확인</span>
         </div>
         <div id="feeOrgInsight" />
-        <div id="feeInsight" />
         <div className="tbl-box">
           <div className="tbl-hd">
             조직별 지급수수료 현황{" "}
