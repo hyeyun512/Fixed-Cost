@@ -343,10 +343,9 @@ export default function Dashboard({ data }: { data: DashboardData }) {
       <div id="tab-alloc" className="content">
         <div className="section-lead">
           예산(BP) 배부 현황<span className="sub" id="allocBudgetSub" />
-          <span className="sub">· Shared 세부 항목은 표를 오른쪽으로 스크롤하면 보입니다</span>
         </div>
         <div className="tbl-box">
-          <div className="alloc-scroll alloc-scroll-narrow">
+          <div className="alloc-scroll">
             <div id="allocBudgetTable" />
           </div>
         </div>
@@ -355,7 +354,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           실적 배부 현황<span className="sub" id="allocActualSub" />
         </div>
         <div className="tbl-box">
-          <div className="alloc-scroll alloc-scroll-narrow">
+          <div className="alloc-scroll">
             <div id="allocActualTable" />
           </div>
         </div>

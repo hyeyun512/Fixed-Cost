@@ -835,9 +835,31 @@ export function initDashboard(data: DashboardData): () => void {
   }
 
   // ================= ALLOCATION BOARD TAB =================
+  // 실적 제외 등으로 모든 열이 0원인 부서/법인사 행은 표를 어지럽히기만 하므로 숨긴다
+  // (본사/법인/Total 같은 구조상의 합계 행(level 0)은 0이어도 항상 유지).
+  function isAllocRowEmpty(r: AllocationRow): boolean {
+    return (
+      r.grandTotal === 0 &&
+      r.stb === 0 &&
+      r.mobility === 0 &&
+      r.evcsDomestic === 0 &&
+      r.evcsOverseas === 0 &&
+      r.humaxCommon === 0 &&
+      r.building === 0 &&
+      r.hMobility === 0 &&
+      r.hEv === 0 &&
+      r.hiparking === 0 &&
+      r.peoplecar === 0 &&
+      r.winercom === 0 &&
+      r.holdings === 0 &&
+      r.hNetworks === 0
+    );
+  }
   // Shared 그룹의 7개 세부 열(H.Mobility~H.Networks)은 기본적으로 화면 밖으로 밀어두고,
   // 자세히 보고 싶을 때만 표를 오른쪽으로 스크롤해서 보게 한다 (가독성을 위해 기본은 숨김에 가깝게).
-  function allocTable(rows: AllocationRow[], opts: { showRate?: boolean; budgetRows?: AllocationRow[] }): string {
+  function allocTable(allRows: AllocationRow[], opts: { showRate?: boolean; budgetRows?: AllocationRow[] }): string {
+    const rows = allRows.filter((r) => r.level === 0 || !isAllocRowEmpty(r));
+    const budgetByLabel = new Map((opts.budgetRows || []).map((b) => [b.label, b]));
     const rateHeader = opts.showRate ? "<th rowspan=\"2\">집행률</th>" : "";
     let html =
       `<table class="pl-tbl alloc-tbl"><thead>` +
@@ -846,11 +868,11 @@ export function initDashboard(data: DashboardData): () => void {
       `<tr><th>합계</th><th>STB</th><th>Mobility</th><th>EVCS(국내)</th><th>EVCS(해외)</th><th>Humax(공통)</th>` +
       `<th>합계</th><th>H.Mobility</th><th>H.EV</th><th>하이파킹</th><th>피플카</th><th>위너콤</th><th>홀딩스</th><th>H.Networks</th></tr>` +
       `</thead><tbody>`;
-    rows.forEach((r, i) => {
+    rows.forEach((r) => {
       const rowClass = r.level === 0 ? "tot" : r.level === 1 ? "alloc-l1" : "alloc-l2";
       let rateCell = "";
       if (opts.showRate) {
-        const b = opts.budgetRows?.[i];
+        const b = budgetByLabel.get(r.label);
         rateCell = `<td class="badge-cell">${rateBadgeCell(b ? rateOf(r.grandTotal, b.grandTotal) : null)}</td>`;
       }
       html +=
