@@ -33,6 +33,8 @@ export type EvcsBlock = {
   categoryByHq: CategoryByHq;
   /** EVCS 배부금액(국내+해외 합산) 기준 본사/법인/구분(re)/대계정 집계 — Summary와 동일한 드릴다운 요약에 재사용. */
   evcsSummary: SummaryBlock;
+  /** EVCS 배부금액(국내+해외 합산) 기준 본사/법인별 대계정 상세 — 계정별 탭의 대계정별 상세와 동일한 형태. */
+  mainAccountByHq: MainAccountByHq;
   certAgency: { domestic: AB; overseas: AB };
 };
 

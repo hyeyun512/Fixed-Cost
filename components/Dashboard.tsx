@@ -190,23 +190,9 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           지급수수료 상세 관리<span className="sub">주요 계정 기준 · 어디서 더 쓰고 덜 쓰는지 확인</span>
         </div>
         <div id="feeInsight" />
-        <div className="chart-2col">
-          <div className="tbl-box" style={{ marginBottom: 0 }}>
-            <div className="tbl-hd">계정별 상세</div>
-            <div id="feeTable" />
-          </div>
-          <div className="panel" style={{ marginBottom: 0 }}>
-            <div className="panel-hd">
-              <div>
-                <div className="panel-title">지급수수료 주요 계정별</div>
-                <div className="panel-sub">백만원</div>
-              </div>
-              <div className="legend" id="feeLegend" />
-            </div>
-            <div className="chart-wrap-lg">
-              <canvas id="feeChart" />
-            </div>
-          </div>
+        <div className="tbl-box">
+          <div className="tbl-hd">구분(re)별 지급수수료 현황 <span className="sub">외주개발용역비, 지급수수료, 인증대행료 등</span></div>
+          <div id="feeTable" />
         </div>
       </div>
 
@@ -267,24 +253,21 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           </div>
         </div>
 
+        <div className="section-lead">
+          대계정별 상세<span className="sub">EVCS 배부 금액(국내+해외) 기준 · 본사 · 법인 각각</span>
+        </div>
         <div className="chart-2col">
           <div className="tbl-box" style={{ marginBottom: 0 }}>
             <div className="tbl-hd">
-              국내 · 해외 요약 <span className="sub" id="evcsTblSub" />
+              본사 대계정별 상세 <span className="sub" id="evcsHqMainAccountTblSub" />
             </div>
-            <div id="evcsSummaryTable" />
+            <div id="evcsHqMainAccountTable" />
           </div>
-          <div className="panel" style={{ marginBottom: 0 }}>
-            <div className="panel-hd">
-              <div>
-                <div className="panel-title">국내 · 해외 예산 vs 실적</div>
-                <div className="panel-sub">백만원</div>
-              </div>
-              <div className="legend" id="evcsLegend" />
+          <div className="tbl-box" style={{ marginBottom: 0 }}>
+            <div className="tbl-hd">
+              법인 대계정별 상세 <span className="sub" id="evcsCorpMainAccountTblSub" />
             </div>
-            <div className="chart-wrap">
-              <canvas id="evcsChart" />
-            </div>
+            <div id="evcsCorpMainAccountTable" />
           </div>
         </div>
 
@@ -292,24 +275,6 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           대계정 '인증대행료' 상세 관리<span className="sub">EVCS에 배부된 인증대행료 · 예산 대비 초과 집행 위험 모니터링</span>
         </div>
         <div id="certAlert" />
-        <div className="chart-2col">
-          <div className="tbl-box" style={{ marginBottom: 0 }}>
-            <div className="tbl-hd">인증대행료 상세</div>
-            <div id="certTable" />
-          </div>
-          <div className="panel" style={{ marginBottom: 0 }}>
-            <div className="panel-hd">
-              <div>
-                <div className="panel-title">인증대행료 국내 · 해외</div>
-                <div className="panel-sub">백만원</div>
-              </div>
-              <div className="legend" id="certLegend" />
-            </div>
-            <div className="chart-wrap">
-              <canvas id="certChart" />
-            </div>
-          </div>
-        </div>
         <div className="panel" style={{ marginBottom: 16 }}>
           <div className="panel-hd">
             <div>
@@ -341,6 +306,8 @@ export default function Dashboard({ data }: { data: DashboardData }) {
 
       {/* ===================== ALLOCATION BOARD TAB ===================== */}
       <div id="tab-alloc" className="content">
+        <div id="allocTrendInsight" />
+
         <div className="section-lead">
           예산(BP) 배부 현황<span className="sub" id="allocBudgetSub" />
         </div>

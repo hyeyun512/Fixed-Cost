@@ -25,7 +25,6 @@ function colorFor(cat: string, idx: number): string {
 
 const C_ACTUAL = "#2563eb";
 const C_BUDGET = "#cbd5e1";
-const C_ACTUAL2 = "#0f172a";
 const C_ALT = "#dc2626";
 const C_ALT2 = "#f59e0b";
 
@@ -88,6 +87,12 @@ export function initDashboard(data: DashboardData): () => void {
   function stripAccountNumber(acc: string): string {
     return acc.replace(/^\d+\s*/, "");
   }
+  /** 받침 유무에 따라 "은"/"는" 조사를 고른다 (예: 본사는, 법인은). */
+  function josaEunNeun(word: string): "은" | "는" {
+    const code = word.charCodeAt(word.length - 1) - 0xac00;
+    if (code < 0 || code > 11171) return "는";
+    return code % 28 !== 0 ? "은" : "는";
+  }
   /**
    * 요약 코멘트 공통 생성기. Summary/계정별/EVCS 탭 모두 이 순서로 원인을 추적한다:
    * 총합계 집행률 확인 → 본사/법인 중 괴리가 큰 쪽 확인 → 그 안에서 구분(re, 부서/법인사) 확인 → 그 구분의 주요 대계정 확인.
@@ -126,7 +131,7 @@ export function initDashboard(data: DashboardData): () => void {
         .slice(0, 2);
 
       if (!deptRows.length) {
-        return `<b>${h.hq}</b>은 ${badgeLabel(h.rate)} 집행률로 ${over ? "예산을 초과" : "예산에 미달"} 집행했습니다 (${over ? "+" : ""}${fmtM(h.diff)}백만원).`;
+        return `<b>${h.hq}</b>${josaEunNeun(h.hq)} ${badgeLabel(h.rate)} 집행률로 ${over ? "예산을 초과" : "예산에 미달"} 집행했습니다 (${over ? "+" : ""}${fmtM(h.diff)}백만원).`;
       }
 
       const parts = deptRows.map((d) => {
@@ -141,8 +146,8 @@ export function initDashboard(data: DashboardData): () => void {
       });
 
       return over
-        ? `<b>${h.hq}</b>은 ${parts.join(", ")} 집행이 주요 원인으로 예산 대비 <b>+${fmtM(h.diff)}백만원 초과</b> 집행했습니다.`
-        : `<b>${h.hq}</b>은 ${parts.join(", ")} 집행 미달로 예산 대비 <b>${fmtM(h.diff)}백만원</b> 절감되었습니다.`;
+        ? `<b>${h.hq}</b>${josaEunNeun(h.hq)} ${parts.join(", ")} 집행이 주요 원인으로 예산 대비 <b>+${fmtM(h.diff)}백만원 초과</b> 집행했습니다.`
+        : `<b>${h.hq}</b>${josaEunNeun(h.hq)} ${parts.join(", ")} 집행 미달로 예산 대비 <b>${fmtM(h.diff)}백만원</b> 절감되었습니다.`;
     });
 
     return `<b>${scopeLabel} 전사 실적</b> — ${overallText}. ${sentences.join(" ")}`;
@@ -481,6 +486,33 @@ export function initDashboard(data: DashboardData): () => void {
     </thead><tbody>${body}${totRow}</tbody></table>`;
   }
 
+  /** 차이 금액이 유의미할 때만, 원인이 되는 구분(부서) 1~2개를 "구분 +차이금액"으로 뽑는다. */
+  function mainAccountRemark(r: MainAccountRow): string {
+    return attributionRemark(r.byDept.map((d) => ({ label: d.dept, actual: d.actual, budget: d.budget })), r.actual, r.budget);
+  }
+  /** 대계정별 상세 표 (구분 컬럼 + 비고). 계정별 탭과 EVCS 탭이 공유한다. */
+  function mainAccountTable(rows: MainAccountRow[]): string {
+    const bodyRows = rows
+      .map((r) => {
+        const diff = r.actual - r.budget;
+        return `<tr><td>${r.category}</td><td>${r.accountLabel}</td>
+          <td${cls(r.budget)}>${fmtM(r.budget)}</td><td${cls(r.actual)}>${fmtM(r.actual)}</td>
+          <td${diffCls(diff)}>${diff >= 0 ? "+" : ""}${fmtM(diff)}</td>
+          <td class="badge-cell">${rateBadgeCell(rateOf(r.actual, r.budget))}</td>
+          <td class="remark-cell">${mainAccountRemark(r)}</td></tr>`;
+      })
+      .join("");
+    const totA = rows.reduce((sum, r) => sum + r.actual, 0);
+    const totB = rows.reduce((sum, r) => sum + r.budget, 0);
+    const totDiff = totA - totB;
+    const totRow = `<tr class="tot"><td colspan="2">대계정 합계</td>
+      <td>${fmtM(totB)}</td><td>${fmtM(totA)}</td>
+      <td${diffCls(totDiff)}>${totDiff >= 0 ? "+" : ""}${fmtM(totDiff)}</td>
+      <td class="badge-cell">${rateBadgeCell(rateOf(totA, totB))}</td>
+      <td></td></tr>`;
+    return `<table class="pl-tbl"><thead><tr><th>구분</th><th>대계정</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th><th>비고</th></tr></thead><tbody>${bodyRows}${totRow}</tbody></table>`;
+  }
+
   // ================= SUMMARY TAB =================
   function renderSummary() {
     CHART_BUILDERS["summary"] = [];
@@ -627,31 +659,6 @@ export function initDashboard(data: DashboardData): () => void {
     setHtml("catInsight", `<div class="callout info"><div class="ic">💡</div><div>${drillDownSummary(scopeLabel(), s)}</div></div>`);
 
     // 대계정별 상세: 구분(카테고리) 컬럼을 추가하고, 구분별 상세와 같은 순서로 대계정을 묶어서 보여준다.
-    // 차이 금액이 유의미할 때만, 원인이 되는 구분(부서) 1~2개를 "구분 +차이금액"으로 뽑는다.
-    const mainAccountRemark = (r: MainAccountRow): string =>
-      attributionRemark(r.byDept.map((d) => ({ label: d.dept, actual: d.actual, budget: d.budget })), r.actual, r.budget);
-
-    const mainAccountTable = (rows: MainAccountRow[]): string => {
-      const bodyRows = rows
-        .map((r) => {
-          const diff = r.actual - r.budget;
-          return `<tr><td>${r.category}</td><td>${r.accountLabel}</td>
-            <td${cls(r.budget)}>${fmtM(r.budget)}</td><td${cls(r.actual)}>${fmtM(r.actual)}</td>
-            <td${diffCls(diff)}>${diff >= 0 ? "+" : ""}${fmtM(diff)}</td>
-            <td class="badge-cell">${rateBadgeCell(rateOf(r.actual, r.budget))}</td>
-            <td class="remark-cell">${mainAccountRemark(r)}</td></tr>`;
-        })
-        .join("");
-      const totA = rows.reduce((sum, r) => sum + r.actual, 0);
-      const totB = rows.reduce((sum, r) => sum + r.budget, 0);
-      const totDiff = totA - totB;
-      const totRow = `<tr class="tot"><td colspan="2">대계정 합계</td>
-        <td>${fmtM(totB)}</td><td>${fmtM(totA)}</td>
-        <td${diffCls(totDiff)}>${totDiff >= 0 ? "+" : ""}${fmtM(totDiff)}</td>
-        <td class="badge-cell">${rateBadgeCell(rateOf(totA, totB))}</td>
-        <td></td></tr>`;
-      return `<table class="pl-tbl"><thead><tr><th>구분</th><th>대계정</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th><th>비고</th></tr></thead><tbody>${bodyRows}${totRow}</tbody></table>`;
-    };
     setText("hqMainAccountTblSub", scopeLabel() + " · 백만원");
     setHtml("hqMainAccountTable", mainAccountTable(scope.mainAccountByHq["본사"]));
     setText("corpMainAccountTblSub", scopeLabel() + " · 백만원");
@@ -669,11 +676,6 @@ export function initDashboard(data: DashboardData): () => void {
         "비고"
       )
     );
-    setHtml("feeLegend", legendHtml([[C_BUDGET, "예산"], [C_ACTUAL2, "실적"]]));
-    queueChart("category", "feeChart", () =>
-      barChart("feeChart", fees.map((f) => f.account), fees.map((f) => f.actual), fees.map((f) => f.budget), { c1: C_ACTUAL2 })
-    );
-
     const cert = fees.find((f) => f.account.includes("인증대행료"));
     if (cert) {
       const certRate = rateOf(cert.actual, cert.budget);
@@ -770,15 +772,17 @@ export function initDashboard(data: DashboardData): () => void {
       )
     );
 
-    setHtml("evcsSummaryTable", table5(row("국내", domA, domB) + row("해외", ovsA, ovsB) + row("국내+해외 합계", totA, totB, "tot")));
-    setHtml("evcsLegend", legendHtml([[C_BUDGET, "예산"], [C_ACTUAL, "실적"]]));
-    queueChart("evcs", "evcsChart", () => barChart("evcsChart", ["국내", "해외"], [domA, ovsA], [domB, ovsB]));
-
     // 경영진 요약 코멘트: 총합계 → 본사/법인 → 구분(re) → 대계정 순으로 원인을 추적한다 (EVCS 배부금액 기준).
     setHtml(
       "evcsInsight",
       `<div class="callout info"><div class="ic">🔋</div><div>${drillDownSummary(scopeLabel(), e.evcsSummary)}</div></div>`
     );
+
+    // 대계정별 상세 (EVCS 배부금액 기준) — 계정별 탭과 동일한 형태.
+    setText("evcsHqMainAccountTblSub", scopeLabel() + " · 백만원");
+    setHtml("evcsHqMainAccountTable", mainAccountTable(e.mainAccountByHq["본사"]));
+    setText("evcsCorpMainAccountTblSub", scopeLabel() + " · 백만원");
+    setHtml("evcsCorpMainAccountTable", mainAccountTable(e.mainAccountByHq["법인"]));
 
     const cd = e.certAgency.domestic,
       co = e.certAgency.overseas;
@@ -786,10 +790,6 @@ export function initDashboard(data: DashboardData): () => void {
       coRate = rateOf(co.actual, co.budget);
     const certTotA = cd.actual + co.actual,
       certTotB = cd.budget + co.budget;
-
-    setHtml("certTable", table5(row("국내", cd.actual, cd.budget) + row("해외", co.actual, co.budget) + row("합계", certTotA, certTotB, "tot")));
-    setHtml("certLegend", legendHtml([["#fca5a5", "예산"], [C_ALT, "실적"]]));
-    queueChart("evcs", "certChart", () => barChart("certChart", ["국내", "해외"], [cd.actual, co.actual], [cd.budget, co.budget], { c1: C_ALT, c2: "#fca5a5" }));
 
     const riskyDom = cdRate !== null && (cdRate === Infinity || cdRate > 130);
     const riskyOvs = coRate !== null && (coRate === Infinity || coRate > 130);
@@ -884,6 +884,10 @@ export function initDashboard(data: DashboardData): () => void {
     setHtml("allocActualTable", allocTable(board.actual, { showRate: true, budgetRows: board.budget }));
     setText("allocDiffSub", scopeLabel() + " · 백만원 · 값에 마우스를 올리면 원인 대계정이 표시됩니다");
     setHtml("allocDiffTable", allocDiffTable(board.actual, board.budget));
+    setHtml(
+      "allocTrendInsight",
+      `<div class="callout info"><div class="ic">📈</div><div><b>${scopeLabel()} 배부 변동 요약</b> — ${allocTrendSummary(board.actual, board.budget)}</div></div>`
+    );
   }
 
   const ALLOC_FIELDS: (keyof AllocValues13)[] = [
@@ -982,6 +986,63 @@ export function initDashboard(data: DashboardData): () => void {
     out.sharedTotal = a.sharedTotal - b.sharedTotal;
     out.grandTotal = a.grandTotal - b.grandTotal;
     return out;
+  }
+  const ALLOC_FIELD_LABEL: Record<keyof AllocValues13, string> = {
+    stb: "STB",
+    mobility: "Mobility",
+    evcsDomestic: "EVCS(국내)",
+    evcsOverseas: "EVCS(해외)",
+    humaxCommon: "Humax(공통)",
+    building: "건물",
+    hMobility: "H.Mobility",
+    hEv: "H.EV",
+    hiparking: "하이파킹",
+    peoplecar: "피플카",
+    winercom: "위너콤",
+    holdings: "홀딩스",
+    hNetworks: "H.Networks",
+  };
+  /**
+   * Diff 표를 실제로 훑어서 배부 항목 간 이동(예: EVCS해외→EVCS국내)이나
+   * 특정 사업부 편중 초과/미달 패턴을 찾아 문장으로 만든다. 추정 없이 실제 diff 값만 사용한다.
+   */
+  function allocTrendSummary(actualRows: AllocationRow[], budgetRows: AllocationRow[]): string {
+    const budgetByLabel = new Map(budgetRows.map((b) => [b.label, b]));
+    const candidates = actualRows
+      .filter((a) => a.level === 1 || a.level === 2)
+      .map((a) => {
+        const b = budgetByLabel.get(a.label);
+        if (!b) return null;
+        const label = a.label.replace(/^\d+\.\s*/, "");
+        const grandDiff = a.grandTotal - b.grandTotal;
+        const dims = ALLOC_FIELDS.map((f) => ({ field: f, label: ALLOC_FIELD_LABEL[f], diff: a[f] - b[f] })).filter(
+          (d) => Math.abs(d.diff) >= REMARK_MIN_DIFF_WON
+        );
+        return dims.length ? { label, grandDiff, dims } : null;
+      })
+      .filter((x): x is { label: string; grandDiff: number; dims: { field: keyof AllocValues13; label: string; diff: number }[] } => x !== null)
+      .sort((x, y) => Math.max(...y.dims.map((d) => Math.abs(d.diff))) - Math.max(...x.dims.map((d) => Math.abs(d.diff))))
+      .slice(0, 4);
+
+    if (!candidates.length) {
+      return "이번 기간 예산 대비 배부 항목별로 유의미한 변동은 없습니다.";
+    }
+
+    const sentences = candidates.map((c) => {
+      const inc = c.dims.filter((d) => d.diff > 0).sort((a, b) => b.diff - a.diff);
+      const dec = c.dims.filter((d) => d.diff < 0).sort((a, b) => a.diff - b.diff);
+      if (inc.length && dec.length) {
+        const from = dec[0],
+          to = inc[0];
+        return `<b>${c.label}</b>${josaEunNeun(c.label)} <b>${from.label}에서 ${to.label}로</b> 리소스 투입이 이동했습니다 (${from.label} ${fmtM(from.diff)}백만원, ${to.label} +${fmtM(to.diff)}백만원).`;
+      }
+      const over = c.grandDiff > 0;
+      const top = [...inc, ...dec].sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff)).slice(0, 2);
+      return `<b>${c.label}</b> 비용의 ${over ? "초과" : "미달"}로 <b>${top.map((d) => d.label).join(", ")}</b>에서 비용치가 ${
+        over ? "초과" : "미달"
+      }되었습니다 (${c.label} 전체 ${c.grandDiff >= 0 ? "+" : ""}${fmtM(c.grandDiff)}백만원).`;
+    });
+    return sentences.join(" ");
   }
 
   function renderAll() {

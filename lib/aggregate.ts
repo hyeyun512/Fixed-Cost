@@ -300,7 +300,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     });
   }
 
-  function mainAccountForHq(actRows: Row[], budRows: Row[], hq: string): MainAccountRow[] {
+  function mainAccountForHqWith(actRows: Row[], budRows: Row[], hq: string, amountOf: (r: Row) => number): MainAccountRow[] {
     const act = new Map<string, number>();
     const bud = new Map<string, number>();
     // 대계정별로 어느 구분(부서)이 실적/예산을 냈는지도 함께 쌓아둔다 (비고란의 원인 부서 표기용).
@@ -308,18 +308,18 @@ export async function loadDashboardData(): Promise<DashboardData> {
     const budByDept = new Map<string, Map<string, number>>();
     for (const r of actRows) {
       if (!r.main_account_re || (r.hq_corp || "기타") !== hq) continue;
-      act.set(r.main_account_re, (act.get(r.main_account_re) || 0) + n(r.amount_krw));
+      act.set(r.main_account_re, (act.get(r.main_account_re) || 0) + amountOf(r));
       const dept = r.report_use_re || "미분류";
       const dm = actByDept.get(r.main_account_re) || new Map<string, number>();
-      dm.set(dept, (dm.get(dept) || 0) + n(r.amount_krw));
+      dm.set(dept, (dm.get(dept) || 0) + amountOf(r));
       actByDept.set(r.main_account_re, dm);
     }
     for (const r of budRows) {
       if (!r.main_account_re || (r.hq_corp || "기타") !== hq) continue;
-      bud.set(r.main_account_re, (bud.get(r.main_account_re) || 0) + n(r.amount_krw));
+      bud.set(r.main_account_re, (bud.get(r.main_account_re) || 0) + amountOf(r));
       const dept = r.report_use_re || "미분류";
       const dm = budByDept.get(r.main_account_re) || new Map<string, number>();
-      dm.set(dept, (dm.get(dept) || 0) + n(r.amount_krw));
+      dm.set(dept, (dm.get(dept) || 0) + amountOf(r));
       budByDept.set(r.main_account_re, dm);
     }
     return mainAccountOrder
@@ -341,11 +341,18 @@ export async function loadDashboardData(): Promise<DashboardData> {
         };
       });
   }
-  function mainAccountByHqForRows(actRows: Row[], budRows: Row[]): MainAccountByHq {
+  function mainAccountByHqForRowsWith(actRows: Row[], budRows: Row[], amountOf: (r: Row) => number): MainAccountByHq {
     return {
-      본사: mainAccountForHq(actRows, budRows, "본사"),
-      법인: mainAccountForHq(actRows, budRows, "법인"),
+      본사: mainAccountForHqWith(actRows, budRows, "본사", amountOf),
+      법인: mainAccountForHqWith(actRows, budRows, "법인", amountOf),
     };
+  }
+  function mainAccountByHqForRows(actRows: Row[], budRows: Row[]): MainAccountByHq {
+    return mainAccountByHqForRowsWith(actRows, budRows, amountKrwOf);
+  }
+  // EVCS 배부금액(국내+해외 합산) 기준 대계정별/구분(re)별 집계 — 계정별 탭의 대계정별 상세와 동일한 형태.
+  function evcsMainAccountByHqForRows(actRows: Row[], budRows: Row[]): MainAccountByHq {
+    return mainAccountByHqForRowsWith(actRows, budRows, evcsKrwOf);
   }
 
   function evcsForRows(actRows: Row[], budRows: Row[]): EvcsBlock {
@@ -417,6 +424,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
       byCategory,
       categoryByHq,
       evcsSummary: evcsSummaryForRows(actRows, budRows),
+      mainAccountByHq: evcsMainAccountByHqForRows(actRows, budRows),
       certAgency: {
         domestic: { actual: certA.dom, budget: certB.dom },
         overseas: { actual: certA.ovs, budget: certB.ovs },
