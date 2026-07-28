@@ -1,7 +1,7 @@
 "use client";
 
 import { Chart, registerables } from "chart.js";
-import type { DashboardData, CategoryRow, MainAccountRow, AllocationRow, AllocValues13, SummaryBlock } from "./types";
+import type { DashboardData, CategoryRow, MainAccountRow, AllocationRow, AllocValues13, SummaryBlock, FeeOrgRow } from "./types";
 
 Chart.register(...registerables);
 
@@ -173,10 +173,47 @@ export function initDashboard(data: DashboardData): () => void {
 
       return over
         ? `<b>${h.hq}</b>${josaEunNeun(h.hq)} ${parts.join(", ")} 집행이 주요 원인으로 예산 대비 <b>+${fmtM(h.diff)}백만원 초과</b> 집행했습니다.`
-        : `<b>${h.hq}</b>${josaEunNeun(h.hq)} ${parts.join(", ")} 집행 미달로 예산 대비 <b>${fmtM(h.diff)}백만원</b> 절감되었습니다.`;
+        : `<b>${h.hq}</b>${josaEunNeun(h.hq)} ${parts.join(", ")} 집행 미달로 예산 대비 <b>${fmtM(h.diff)}백만원</b> 미달 집행되었습니다.`;
     });
 
     return `<b>${scopeLabel} 전사 실적</b> — ${overallText}. ${sentences.join(" ")}`;
+  }
+  /**
+   * 조직별 지급수수료 현황 표 위에 붙는 요약 코멘트. 전체 집행률을 먼저 밝히고, 그 아래에서
+   * 예산 대비 가장 크게 미달/초과된 조직을 각각 하나씩(있는 경우만) 짚어준다.
+   * Staff부문은 자체 합계 대신 그 하위 대조직(예: "Staff부문의 경영지원실")으로 표기해 더 구체적으로 알려준다.
+   */
+  function feeOrgSummary(scopeLbl: string, rows: FeeOrgRow[]): string {
+    const level0 = rows.filter((r) => r.level === 0);
+    const totalAct = level0.reduce((s, r) => s + r.actual, 0);
+    const totalBud = level0.reduce((s, r) => s + r.budget, 0);
+    const rate = rateOf(totalAct, totalBud);
+    const overallText =
+      rate === null
+        ? "집행 실적이 아직 없습니다"
+        : rate === Infinity
+        ? "예산 없이 집행이 발생했습니다"
+        : `지급수수료 집행률은 ${Math.round(rate)}%로 ${
+            rate > 105 ? "예산을 다소 초과" : rate < 95 ? "예산 대비 여유 있게" : "예산 범위 내에서 양호하게"
+          } 집행되었습니다`;
+
+    const leaves = rows
+      .filter((r) => !(r.level === 0 && r.org === "5. Staff부문"))
+      .map((r) => ({ label: r.level === 1 ? `Staff부문의 ${r.org}` : stripDeptNumber(r.org), diff: r.actual - r.budget }))
+      .filter((l) => Math.abs(l.diff) >= REMARK_MIN_DIFF_WON);
+
+    const topOver = leaves.filter((l) => l.diff > 0).sort((a, b) => b.diff - a.diff)[0];
+    const topUnder = leaves.filter((l) => l.diff < 0).sort((a, b) => a.diff - b.diff)[0];
+
+    const parts: string[] = [];
+    if (topUnder) parts.push(`<b>${topUnder.label}</b>에서 ${fmtM(topUnder.diff)}백만원 미달되었고`);
+    if (topOver) parts.push(`<b>${topOver.label}</b>에서 +${fmtM(topOver.diff)}백만원 초과집행되었습니다`);
+
+    if (!parts.length) {
+      return `<b>${scopeLbl} 지급수수료 현황</b> — ${overallText}. 조직별로도 예산 범위 내에서 안정적으로 관리되고 있습니다.`;
+    }
+    const tail = parts.length === 2 ? parts.join(", ") : parts[0].replace(/되었고$/, "되었습니다");
+    return `<b>${scopeLbl} 지급수수료 현황</b> — ${overallText}, ${tail}.`;
   }
   /** 전월 대비 증감 배지 (당월 보기에서만 의미가 있음). */
   function momBadgeHtml(current: number, previous: number | null): string {
@@ -693,6 +730,7 @@ export function initDashboard(data: DashboardData): () => void {
     // 조직별 지급수수료 현황 (맨 아래 배치): 본사 5개 부문(Staff부문은 대조직까지 세분화) + 법인 기준으로
     // 지급수수료 계열 4개 대계정(지급수수료/외주개발용역비/인증대행료/특허처리비) 합계를 보여준다.
     // 비고란에는 차이의 주요 원인 대계정을 표기하고, 누계 보기에서는 특정 월에 차이가 집중된 경우 그 월도 함께 짚어준다.
+    setHtml("feeOrgInsight", `<div class="callout info"><div class="ic">🧾</div><div>${feeOrgSummary(scopeLabel(), scope.feeByOrg)}</div></div>`);
     const feeOrgRows = scope.feeByOrg.filter((r) => r.actual !== 0 || r.budget !== 0);
     const feeOrgRemark = (r: (typeof feeOrgRows)[number]): string => {
       const base = attributionRemark(
