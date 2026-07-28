@@ -493,9 +493,16 @@ export async function loadDashboardData(): Promise<DashboardData> {
     };
   }
 
+  // report_use_re가 법인 소속사 코드(HUK, HUS 등)이면 hq_corp 값과 무관하게 법인으로 취급한다.
+  // (raw 데이터에 일부 법인 관련 전표가 hq_corp='본사'로 잘못 태깅된 채 report_use_re만 법인
+  // 코드로 남아있는 경우가 있어, 배부판에서 본사 밑에 법인이 섞여 보이는 문제가 있었다.)
+  function effectiveAllocHq(r: Row): string {
+    if (r.report_use_re && corpCompanySet.has(r.report_use_re)) return "법인";
+    return r.hq_corp || "기타";
+  }
   function buildAllocationBoard(rows: Row[]): AllocationRow[] {
     const board: AllocationRow[] = [];
-    const hqRows = rows.filter((r) => (r.hq_corp || "기타") === "본사");
+    const hqRows = rows.filter((r) => effectiveAllocHq(r) === "본사");
     board.push(allocationRow("본사(HKR)", 0, hqRows));
     for (const dept of hqDeptOrder) {
       const deptRows = hqRows.filter((r) => (r.report_use_re || "미분류") === dept);
@@ -507,7 +514,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
         }
       }
     }
-    const corpRows = rows.filter((r) => (r.hq_corp || "기타") === "법인");
+    const corpRows = rows.filter((r) => effectiveAllocHq(r) === "법인");
     board.push(allocationRow("법인", 0, corpRows));
     for (const co of corpCompanyOrder) {
       const coRows = corpRows.filter((r) => (r.report_use_re || r.company || "미분류") === co);

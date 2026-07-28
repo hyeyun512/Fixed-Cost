@@ -87,11 +87,22 @@ export function initDashboard(data: DashboardData): () => void {
   function stripAccountNumber(acc: string): string {
     return acc.replace(/^\d+\s*/, "");
   }
+  /** "5. Staff부문" -> "Staff부문"처럼 구분(re) 앞의 번호를 뗀 표시용 이름. */
+  function stripDeptNumber(dept: string): string {
+    return dept.replace(/^\d+\.\s*/, "");
+  }
   /** 받침 유무에 따라 "은"/"는" 조사를 고른다 (예: 본사는, 법인은). */
   function josaEunNeun(word: string): "은" | "는" {
     const code = word.charCodeAt(word.length - 1) - 0xac00;
     if (code < 0 || code > 11171) return "는";
     return code % 28 !== 0 ? "은" : "는";
+  }
+  /** 받침 유무에 따라 "로"/"으로" 조사를 고른다 (받침 없음/ㄹ받침 -> 로, 그 외 -> 으로). */
+  function josaRoEuro(word: string): "로" | "으로" {
+    const code = word.charCodeAt(word.length - 1) - 0xac00;
+    if (code < 0 || code > 11171) return "로";
+    const final = code % 28;
+    return final === 0 || final === 8 ? "로" : "으로";
   }
   /**
    * 요약 코멘트 공통 생성기. Summary/계정별/EVCS 탭 모두 이 순서로 원인을 추적한다:
@@ -135,7 +146,7 @@ export function initDashboard(data: DashboardData): () => void {
       }
 
       const parts = deptRows.map((d) => {
-        const deptLabel = d.dept.replace(/^\d+\.\s*/, "");
+        const deptLabel = stripDeptNumber(d.dept);
         const topAccs = d.byMainAccount
           .map((a) => ({ label: stripAccountNumber(a.account), diff: a.actual - a.budget }))
           .filter((a) => Math.sign(a.diff) === Math.sign(d.diff))
@@ -488,7 +499,7 @@ export function initDashboard(data: DashboardData): () => void {
 
   /** 차이 금액이 유의미할 때만, 원인이 되는 구분(부서) 1~2개를 "구분 +차이금액"으로 뽑는다. */
   function mainAccountRemark(r: MainAccountRow): string {
-    return attributionRemark(r.byDept.map((d) => ({ label: d.dept, actual: d.actual, budget: d.budget })), r.actual, r.budget);
+    return attributionRemark(r.byDept.map((d) => ({ label: stripDeptNumber(d.dept), actual: d.actual, budget: d.budget })), r.actual, r.budget);
   }
   /** 대계정별 상세 표 (구분 컬럼 + 비고). 계정별 탭과 EVCS 탭이 공유한다. */
   function mainAccountTable(rows: MainAccountRow[]): string {
@@ -666,7 +677,7 @@ export function initDashboard(data: DashboardData): () => void {
 
     // 지급수수료 상세 관리 (맨 아래 배치): 비고란에 차이의 주요 원인이 되는 구분(re) 표기
     const feeRemark = (f: FeeRow): string =>
-      attributionRemark(f.byDept.map((d) => ({ label: d.dept, actual: d.actual, budget: d.budget })), f.actual, f.budget);
+      attributionRemark(f.byDept.map((d) => ({ label: stripDeptNumber(d.dept), actual: d.actual, budget: d.budget })), f.actual, f.budget);
     setHtml(
       "feeTable",
       table5(
@@ -987,61 +998,58 @@ export function initDashboard(data: DashboardData): () => void {
     out.grandTotal = a.grandTotal - b.grandTotal;
     return out;
   }
-  const ALLOC_FIELD_LABEL: Record<keyof AllocValues13, string> = {
-    stb: "STB",
-    mobility: "Mobility",
-    evcsDomestic: "EVCS(국내)",
-    evcsOverseas: "EVCS(해외)",
-    humaxCommon: "Humax(공통)",
-    building: "건물",
-    hMobility: "H.Mobility",
-    hEv: "H.EV",
-    hiparking: "하이파킹",
-    peoplecar: "피플카",
-    winercom: "위너콤",
-    holdings: "홀딩스",
-    hNetworks: "H.Networks",
-  };
   /**
    * Diff 표를 실제로 훑어서 배부 항목 간 이동(예: EVCS해외→EVCS국내)이나
    * 특정 사업부 편중 초과/미달 패턴을 찾아 문장으로 만든다. 추정 없이 실제 diff 값만 사용한다.
    */
   function allocTrendSummary(actualRows: AllocationRow[], budgetRows: AllocationRow[]): string {
     const budgetByLabel = new Map(budgetRows.map((b) => [b.label, b]));
-    const candidates = actualRows
+    const rows = actualRows
       .filter((a) => a.level === 1 || a.level === 2)
       .map((a) => {
         const b = budgetByLabel.get(a.label);
         if (!b) return null;
-        const label = a.label.replace(/^\d+\.\s*/, "");
-        const grandDiff = a.grandTotal - b.grandTotal;
-        const dims = ALLOC_FIELDS.map((f) => ({ field: f, label: ALLOC_FIELD_LABEL[f], diff: a[f] - b[f] })).filter(
-          (d) => Math.abs(d.diff) >= REMARK_MIN_DIFF_WON
-        );
-        return dims.length ? { label, grandDiff, dims } : null;
+        return { label: stripDeptNumber(a.label), diff: diffOf(a, b) };
       })
-      .filter((x): x is { label: string; grandDiff: number; dims: { field: keyof AllocValues13; label: string; diff: number }[] } => x !== null)
-      .sort((x, y) => Math.max(...y.dims.map((d) => Math.abs(d.diff))) - Math.max(...x.dims.map((d) => Math.abs(d.diff))))
-      .slice(0, 4);
+      .filter((x): x is { label: string; diff: AllocValues13 & { humaxTotal: number; sharedTotal: number; grandTotal: number } } => x !== null);
 
-    if (!candidates.length) {
-      return "이번 기간 예산 대비 배부 항목별로 유의미한 변동은 없습니다.";
+    const dims: { key: "stb" | "mobility" | "evcsDomestic" | "evcsOverseas" | "humaxCommon" | "sharedTotal"; label: string }[] = [
+      { key: "stb", label: "STB" },
+      { key: "mobility", label: "Mobility" },
+      { key: "evcsDomestic", label: "EVCS(국내)" },
+      { key: "evcsOverseas", label: "EVCS(해외)" },
+      { key: "humaxCommon", label: "Humax(공통)" },
+      { key: "sharedTotal", label: "Shared" },
+    ];
+
+    const sentences: string[] = [];
+    for (const dim of dims) {
+      const dimTotal = rows.reduce((s, r) => s + r.diff[dim.key], 0);
+      if (Math.abs(dimTotal) < REMARK_MIN_DIFF_WON) continue; // 이 항목은 전사적으로 유의미한 변동 없음
+      const sign = dimTotal > 0 ? 1 : -1;
+      const top = rows
+        .filter((r) => Math.sign(r.diff[dim.key]) === sign)
+        .sort((a, b) => Math.abs(b.diff[dim.key]) - Math.abs(a.diff[dim.key]))[0];
+      if (!top) continue;
+
+      const over = dimTotal > 0;
+      // 이 Company의 배부전 총합계도 같은 방향으로 유의미하게 움직였으면 "총합계 변동", 아니면 "배부 변동"(다른 항목에서 이동).
+      const totalMovedSameWay = Math.sign(top.diff.grandTotal) === sign && Math.abs(top.diff.grandTotal) >= REMARK_MIN_DIFF_WON;
+      const causeType = totalMovedSameWay ? "총합계 자체의 변동" : "다른 항목에서의 배부 변동";
+      sentences.push(
+        `<b>${dim.label}</b>${josaEunNeun(dim.label)} 예산 대비 ${over ? "+" : ""}${fmtM(dimTotal)}백만원 ${
+          over ? "초과" : "미달"
+        }이며, 주요 원인은 <b>${top.label}</b>(${top.diff[dim.key] >= 0 ? "+" : ""}${fmtM(top.diff[dim.key])}백만원)${josaEunNeun(
+          top.label
+        )}로, ${top.label}의 배부전 총합계는 ${
+          totalMovedSameWay ? `${top.diff.grandTotal >= 0 ? "+" : ""}${fmtM(top.diff.grandTotal)}백만원 함께 움직여` : "예산과 큰 차이가 없어"
+        } <b>${causeType}</b>${josaRoEuro(causeType)} 파악됩니다.`
+      );
     }
 
-    const sentences = candidates.map((c) => {
-      const inc = c.dims.filter((d) => d.diff > 0).sort((a, b) => b.diff - a.diff);
-      const dec = c.dims.filter((d) => d.diff < 0).sort((a, b) => a.diff - b.diff);
-      if (inc.length && dec.length) {
-        const from = dec[0],
-          to = inc[0];
-        return `<b>${c.label}</b>${josaEunNeun(c.label)} <b>${from.label}에서 ${to.label}로</b> 리소스 투입이 이동했습니다 (${from.label} ${fmtM(from.diff)}백만원, ${to.label} +${fmtM(to.diff)}백만원).`;
-      }
-      const over = c.grandDiff > 0;
-      const top = [...inc, ...dec].sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff)).slice(0, 2);
-      return `<b>${c.label}</b> 비용의 ${over ? "초과" : "미달"}로 <b>${top.map((d) => d.label).join(", ")}</b>에서 비용치가 ${
-        over ? "초과" : "미달"
-      }되었습니다 (${c.label} 전체 ${c.grandDiff >= 0 ? "+" : ""}${fmtM(c.grandDiff)}백만원).`;
-    });
+    if (!sentences.length) {
+      return "이번 기간 STB/Mobility/EVCS(국내)/EVCS(해외)/Humax(공통)/Shared 기준으로 예산 대비 유의미한 변동은 없습니다.";
+    }
     return sentences.join(" ");
   }
 
