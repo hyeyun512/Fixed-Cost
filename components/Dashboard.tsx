@@ -258,6 +258,15 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           </div>
         </div>
 
+        <div className="tbl-box">
+          <div className="tbl-hd">
+            구분별 상세 <span className="sub">EVCS 배부 금액(국내+해외) 기준</span>
+          </div>
+          <div className="tbl-scroll">
+            <div id="evcsCatTable" />
+          </div>
+        </div>
+
         <div className="chart-2col">
           <div className="tbl-box" style={{ marginBottom: 0 }}>
             <div className="tbl-hd">
@@ -277,11 +286,6 @@ export default function Dashboard({ data }: { data: DashboardData }) {
               <canvas id="evcsChart" />
             </div>
           </div>
-        </div>
-
-        <div className="section-lead">구분별 상세<span className="sub">국내+해외 합계 · 구성요소인 국내/해외 병기</span></div>
-        <div className="tbl-box">
-          <div id="evcsCatTable" />
         </div>
 
         <div className="section-lead">
@@ -339,9 +343,10 @@ export default function Dashboard({ data }: { data: DashboardData }) {
       <div id="tab-alloc" className="content">
         <div className="section-lead">
           예산(BP) 배부 현황<span className="sub" id="allocBudgetSub" />
+          <span className="sub">· Shared 세부 항목은 표를 오른쪽으로 스크롤하면 보입니다</span>
         </div>
         <div className="tbl-box">
-          <div className="tbl-scroll">
+          <div className="alloc-scroll alloc-scroll-narrow">
             <div id="allocBudgetTable" />
           </div>
         </div>
@@ -350,7 +355,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           실적 배부 현황<span className="sub" id="allocActualSub" />
         </div>
         <div className="tbl-box">
-          <div className="tbl-scroll">
+          <div className="alloc-scroll alloc-scroll-narrow">
             <div id="allocActualTable" />
           </div>
         </div>

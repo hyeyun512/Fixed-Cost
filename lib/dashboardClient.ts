@@ -431,6 +431,38 @@ export function initDashboard(data: DashboardData): () => void {
     const extraTh = extraColLabel === undefined ? "" : `<th>${extraColLabel}</th>`;
     return `<table class="pl-tbl"><thead><tr><th>${firstColLabel}</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th>${extraTh}</tr></thead><tbody>${rowsHtml}</tbody></table>`;
   }
+  /** 예산/실적/차이/집행률 4칸 한 세트 (병렬 배치 표에서 그룹 하나를 이룬다). */
+  function quadCells(actual: number, budget: number): string {
+    const diff = actual - budget;
+    return (
+      `<td${cls(budget)}>${fmtM(budget)}</td><td${cls(actual)}>${fmtM(actual)}</td>` +
+      `<td${diffCls(diff)}>${diff >= 0 ? "+" : ""}${fmtM(diff)}</td>` +
+      `<td class="badge-cell">${rateBadgeCell(rateOf(actual, budget))}</td>`
+    );
+  }
+  /** 총합계/그룹B/그룹C를 각각 4칸씩 나란히 배치하는 표 (구분별 상세, EVCS 구분별 상세에서 재사용). */
+  function parallelTable(
+    firstColLabel: string,
+    groupLabels: [string, string, string],
+    rows: { label: string; total: { actual: number; budget: number }; b: { actual: number; budget: number }; c: { actual: number; budget: number } }[],
+    totalRowLabel: string
+  ): string {
+    const body = rows
+      .map((r) => `<tr><td>${r.label}</td>${quadCells(r.total.actual, r.total.budget)}${quadCells(r.b.actual, r.b.budget)}${quadCells(r.c.actual, r.c.budget)}</tr>`)
+      .join("");
+    const sum = (pick: (r: (typeof rows)[number]) => { actual: number; budget: number }) => ({
+      actual: rows.reduce((s, r) => s + pick(r).actual, 0),
+      budget: rows.reduce((s, r) => s + pick(r).budget, 0),
+    });
+    const totTotal = sum((r) => r.total),
+      totB = sum((r) => r.b),
+      totC = sum((r) => r.c);
+    const totRow = `<tr class="tot"><td>${totalRowLabel}</td>${quadCells(totTotal.actual, totTotal.budget)}${quadCells(totB.actual, totB.budget)}${quadCells(totC.actual, totC.budget)}</tr>`;
+    return `<table class="pl-tbl parallel-tbl"><thead>
+      <tr><th rowspan="2">${firstColLabel}</th><th colspan="4" class="grp-total">${groupLabels[0]}</th><th colspan="4" class="grp-hq">${groupLabels[1]}</th><th colspan="4" class="grp-corp">${groupLabels[2]}</th></tr>
+      <tr><th>예산</th><th>실적</th><th>차이</th><th>집행률</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th></tr>
+    </thead><tbody>${body}${totRow}</tbody></table>`;
+  }
 
   // ================= SUMMARY TAB =================
   function renderSummary() {
@@ -566,34 +598,19 @@ export function initDashboard(data: DashboardData): () => void {
 
     // 구분별 상세: 구분마다 총합계/본사/법인을 각각 예산·실적·차이·집행률 4열씩 나란히(병렬) 배치해
     // 본사와 법인을 한 행에서 바로 비교할 수 있게 한다.
-    const quadCells = (actual: number, budget: number): string => {
-      const diff = actual - budget;
-      return (
-        `<td${cls(budget)}>${fmtM(budget)}</td><td${cls(actual)}>${fmtM(actual)}</td>` +
-        `<td${diffCls(diff)}>${diff >= 0 ? "+" : ""}${fmtM(diff)}</td>` +
-        `<td class="badge-cell">${rateBadgeCell(rateOf(actual, budget))}</td>`
-      );
-    };
-    const catBody = cats
-      .map((c) => {
-        const hq본사 = catHq.본사.find((x) => x.category === c.category) || { actual: 0, budget: 0 };
-        const hq법인 = catHq.법인.find((x) => x.category === c.category) || { actual: 0, budget: 0 };
-        return `<tr><td>${c.category}</td>${quadCells(c.actual, c.budget)}${quadCells(hq본사.actual, hq본사.budget)}${quadCells(hq법인.actual, hq법인.budget)}</tr>`;
-      })
-      .join("");
-    const totA = cats.reduce((s, c) => s + c.actual, 0),
-      totB = cats.reduce((s, c) => s + c.budget, 0);
-    const hq본사TotA = catHq.본사.reduce((s, c) => s + c.actual, 0),
-      hq본사TotB = catHq.본사.reduce((s, c) => s + c.budget, 0);
-    const hq법인TotA = catHq.법인.reduce((s, c) => s + c.actual, 0),
-      hq법인TotB = catHq.법인.reduce((s, c) => s + c.budget, 0);
-    const catTotRow = `<tr class="tot"><td>전체 합계</td>${quadCells(totA, totB)}${quadCells(hq본사TotA, hq본사TotB)}${quadCells(hq법인TotA, hq법인TotB)}</tr>`;
     setHtml(
       "categoryTable",
-      `<table class="pl-tbl parallel-tbl"><thead>
-        <tr><th rowspan="2">구분</th><th colspan="4" class="grp-total">총합계</th><th colspan="4" class="grp-hq">본사</th><th colspan="4" class="grp-corp">법인</th></tr>
-        <tr><th>예산</th><th>실적</th><th>차이</th><th>집행률</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th></tr>
-      </thead><tbody>${catBody}${catTotRow}</tbody></table>`
+      parallelTable(
+        "구분",
+        ["총합계", "본사", "법인"],
+        cats.map((c) => ({
+          label: c.category,
+          total: { actual: c.actual, budget: c.budget },
+          b: catHq.본사.find((x) => x.category === c.category) || { actual: 0, budget: 0 },
+          c: catHq.법인.find((x) => x.category === c.category) || { actual: 0, budget: 0 },
+        })),
+        "전체 합계"
+      )
     );
     setHtml("catLegend", legendHtml([[C_BUDGET, "예산"], [C_ACTUAL, "실적"]]));
     queueChart("category", "categoryChart", () =>
@@ -742,6 +759,22 @@ export function initDashboard(data: DashboardData): () => void {
       )
     );
 
+    // 구분별 상세: 계정별 탭과 같은 병렬 배치로, EVCS 배부 금액(국내+해외) 기준 총합계/국내/해외를 나란히 보여준다.
+    setHtml(
+      "evcsCatTable",
+      parallelTable(
+        "구분",
+        ["총합계", "국내", "해외"],
+        e.byCategory.map((c) => ({
+          label: c.category,
+          total: { actual: c.dom_actual + c.ovs_actual, budget: c.dom_budget + c.ovs_budget },
+          b: { actual: c.dom_actual, budget: c.dom_budget },
+          c: { actual: c.ovs_actual, budget: c.ovs_budget },
+        })),
+        "전체 합계"
+      )
+    );
+
     setHtml("evcsSummaryTable", table5(row("국내", domA, domB) + row("해외", ovsA, ovsB) + row("국내+해외 합계", totA, totB, "tot")));
     setHtml("evcsLegend", legendHtml([[C_BUDGET, "예산"], [C_ACTUAL, "실적"]]));
     queueChart("evcs", "evcsChart", () => barChart("evcsChart", ["국내", "해외"], [domA, ovsA], [domB, ovsB]));
@@ -755,22 +788,6 @@ export function initDashboard(data: DashboardData): () => void {
       insightMsg += ` ${domHigher ? "국내" : ""}${domHigher && ovsHigher ? ", " : ""}${ovsHigher ? "해외" : ""} 집행률이 예산 대비 110%를 초과했습니다.`;
     }
     setHtml("evcsInsight", `<div class="callout info"><div class="ic">🔋</div><div>${insightMsg}</div></div>`);
-
-    // 구분별 상세: 구분마다 합계(국내+해외, 볼드) 아래에 구성요소인 국내/해외를 나란히 보여준다.
-    const evcsCatRows = e.byCategory
-      .map((c) => {
-        const totActual = c.dom_actual + c.ovs_actual;
-        const totBudget = c.dom_budget + c.ovs_budget;
-        return (
-          row(c.category, totActual, totBudget, "tot") +
-          row(c.category, c.dom_actual, c.dom_budget, "", "국내") +
-          row(c.category, c.ovs_actual, c.ovs_budget, "", "해외")
-        );
-      })
-      .join("");
-    const evcsCatTotA = e.byCategory.reduce((s, c) => s + c.dom_actual + c.ovs_actual, 0);
-    const evcsCatTotB = e.byCategory.reduce((s, c) => s + c.dom_budget + c.ovs_budget, 0);
-    setHtml("evcsCatTable", table5(evcsCatRows + row("전체 합계", evcsCatTotA, evcsCatTotB, "tot")));
 
     const cd = e.certAgency.domestic,
       co = e.certAgency.overseas;
@@ -818,15 +835,17 @@ export function initDashboard(data: DashboardData): () => void {
   }
 
   // ================= ALLOCATION BOARD TAB =================
+  // Shared 그룹의 7개 세부 열(H.Mobility~H.Networks)은 기본적으로 화면 밖으로 밀어두고,
+  // 자세히 보고 싶을 때만 표를 오른쪽으로 스크롤해서 보게 한다 (가독성을 위해 기본은 숨김에 가깝게).
   function allocTable(rows: AllocationRow[], opts: { showRate?: boolean; budgetRows?: AllocationRow[] }): string {
-    const rateHeader = opts.showRate ? "<th>집행률</th>" : "";
+    const rateHeader = opts.showRate ? "<th rowspan=\"2\">집행률</th>" : "";
     let html =
-      `<table class="pl-tbl alloc-tbl"><thead><tr>` +
-      `<th>Company</th><th class="alloc-tot-col">(A+B+C)<br>합계</th>${rateHeader}` +
-      `<th>(A)<br>Humax합계</th><th>STB</th><th>Mobility</th><th>EVCS(국내)</th><th>EVCS(해외)</th><th>Humax(공통)</th>` +
-      `<th>(B)<br>건물</th><th>(C)<br>Shared합계</th>` +
-      `<th>H.Mobility</th><th>H.EV</th><th>하이파킹</th><th>피플카</th><th>위너콤</th><th>홀딩스</th><th>H.Networks</th>` +
-      `</tr></thead><tbody>`;
+      `<table class="pl-tbl alloc-tbl"><thead>` +
+      `<tr><th rowspan="2">Company</th><th rowspan="2" class="alloc-tot-col">(A+B+C)<br>합계</th>${rateHeader}` +
+      `<th colspan="6" class="grp-a">(A) Humax</th><th rowspan="2">(B)<br>건물</th><th colspan="8" class="grp-c">(C) Shared</th></tr>` +
+      `<tr><th>합계</th><th>STB</th><th>Mobility</th><th>EVCS(국내)</th><th>EVCS(해외)</th><th>Humax(공통)</th>` +
+      `<th>합계</th><th>H.Mobility</th><th>H.EV</th><th>하이파킹</th><th>피플카</th><th>위너콤</th><th>홀딩스</th><th>H.Networks</th></tr>` +
+      `</thead><tbody>`;
     rows.forEach((r, i) => {
       const rowClass = r.level === 0 ? "tot" : r.level === 1 ? "alloc-l1" : "alloc-l2";
       let rateCell = "";
@@ -835,9 +854,9 @@ export function initDashboard(data: DashboardData): () => void {
         rateCell = `<td class="badge-cell">${rateBadgeCell(b ? rateOf(r.grandTotal, b.grandTotal) : null)}</td>`;
       }
       html +=
-        `<tr class="${rowClass}"><td>${r.label}</td><td class="alloc-tot-col">${fmtM(r.grandTotal)}</td>${rateCell}` +
+        `<tr class="${rowClass}"><td class="alloc-sticky">${r.label}</td><td class="alloc-tot-col">${fmtM(r.grandTotal)}</td>${rateCell}` +
         `<td>${fmtM(r.humaxTotal)}</td><td>${fmtM(r.stb)}</td><td>${fmtM(r.mobility)}</td><td>${fmtM(r.evcsDomestic)}</td><td>${fmtM(r.evcsOverseas)}</td><td>${fmtM(r.humaxCommon)}</td>` +
-        `<td>${fmtM(r.building)}</td><td>${fmtM(r.sharedTotal)}</td>` +
+        `<td>${fmtM(r.building)}</td><td class="alloc-shared-col">${fmtM(r.sharedTotal)}</td>` +
         `<td>${fmtM(r.hMobility)}</td><td>${fmtM(r.hEv)}</td><td>${fmtM(r.hiparking)}</td><td>${fmtM(r.peoplecar)}</td><td>${fmtM(r.winercom)}</td><td>${fmtM(r.holdings)}</td><td>${fmtM(r.hNetworks)}</td></tr>`;
     });
     html += "</tbody></table>";
