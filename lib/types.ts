@@ -19,6 +19,20 @@ export type CategoryByHq = { 총합계: CategoryRow[]; 본사: CategoryRow[]; �
 export type FeeDeptRow = { dept: string; actual: number; budget: number };
 export type FeeRow = { account: string; actual: number; budget: number; byDept: FeeDeptRow[] };
 
+export type FeeOrgMonthRow = { month: string; actual: number; budget: number };
+export type FeeOrgAccountRow = { account: string; actual: number; budget: number };
+/** 조직(부문/법인) 기준 지급수수료 계열(지급수수료·외주개발용역비·인증대행료·특허처리비 합계) 집계. */
+export type FeeOrgRow = {
+  org: string;
+  /** 0=부문/법인, 1=Staff부문 하위 대조직 — 표시 들여쓰기에 사용. */
+  level: 0 | 1;
+  actual: number;
+  budget: number;
+  byAccount: FeeOrgAccountRow[];
+  /** 누계 보기에서 차이가 특정 월에 집중되었는지 판단하기 위한 월별 내역. */
+  monthly: FeeOrgMonthRow[];
+};
+
 export type EvcsCatRow = {
   category: string;
   dom_actual: number;
@@ -89,6 +103,7 @@ export type MonthBlock = {
   category: CategoryRow[];
   categoryByHq: CategoryByHq;
   fee: FeeRow[];
+  feeByOrg: FeeOrgRow[];
   evcs: EvcsBlock;
   mainAccountByHq: MainAccountByHq;
   allocationBoard: AllocationBoard;
@@ -97,6 +112,7 @@ export type MonthBlock = {
     category: CategoryRow[];
     categoryByHq: CategoryByHq;
     fee: FeeRow[];
+    feeByOrg: FeeOrgRow[];
     evcs: EvcsBlock;
     mainAccountByHq: MainAccountByHq;
     allocationBoard: AllocationBoard;

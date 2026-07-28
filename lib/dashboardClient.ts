@@ -1,7 +1,7 @@
 "use client";
 
 import { Chart, registerables } from "chart.js";
-import type { DashboardData, CategoryRow, FeeRow, MainAccountRow, AllocationRow, AllocValues13, SummaryBlock } from "./types";
+import type { DashboardData, CategoryRow, MainAccountRow, AllocationRow, AllocValues13, SummaryBlock } from "./types";
 
 Chart.register(...registerables);
 
@@ -82,6 +82,21 @@ export function initDashboard(data: DashboardData): () => void {
     return contributors
       .map((c) => `<span class="${c.diff >= 0 ? "neg" : "pos"}">${c.label} ${c.diff >= 0 ? "+" : ""}${fmtM(c.diff)}백만원</span>`)
       .join(", ");
+  }
+  /**
+   * 누계 보기에서, 조직의 지급수수료 계열 차이가 특정 한 달에 쏠려 발생했는지 확인해 별도로 짚어준다.
+   * 전체 차이의 절반 이상을 단일 월이 차지할 때만 "집중 발생"으로 보고 표기한다 (당월 보기에서는 표기하지 않음).
+   */
+  function feeOrgMonthNote(monthly: { month: string; actual: number; budget: number }[], totalDiff: number): string {
+    if (currentMode !== "cum" || monthly.length < 2) return "";
+    if (Math.abs(totalDiff) < REMARK_MIN_DIFF_WON) return "";
+    const sign = totalDiff > 0 ? 1 : -1;
+    const top = monthly
+      .map((mo) => ({ month: mo.month, diff: mo.actual - mo.budget }))
+      .filter((mo) => Math.sign(mo.diff) === sign)
+      .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))[0];
+    if (!top || Math.abs(top.diff) < REMARK_MIN_DIFF_WON || Math.abs(top.diff) < Math.abs(totalDiff) * 0.5) return "";
+    return `, <span style="color:#94a3b8">${top.month}에 ${top.diff >= 0 ? "+" : ""}${fmtM(top.diff)}백만원 집중 발생</span>`;
   }
   /** "11 급여" -> "급여"처럼 대계정(re) 코드 앞자리 숫자를 뗀 표시용 이름. */
   function stripAccountNumber(acc: string): string {
@@ -675,15 +690,26 @@ export function initDashboard(data: DashboardData): () => void {
     setText("corpMainAccountTblSub", scopeLabel() + " · 백만원");
     setHtml("corpMainAccountTable", mainAccountTable(scope.mainAccountByHq["법인"]));
 
-    // 지급수수료 상세 관리 (맨 아래 배치): 비고란에 차이의 주요 원인이 되는 구분(re) 표기
-    const feeRemark = (f: FeeRow): string =>
-      attributionRemark(f.byDept.map((d) => ({ label: stripDeptNumber(d.dept), actual: d.actual, budget: d.budget })), f.actual, f.budget);
+    // 조직별 지급수수료 현황 (맨 아래 배치): 본사 5개 부문(Staff부문은 대조직까지 세분화) + 법인 기준으로
+    // 지급수수료 계열 4개 대계정(지급수수료/외주개발용역비/인증대행료/특허처리비) 합계를 보여준다.
+    // 비고란에는 차이의 주요 원인 대계정을 표기하고, 누계 보기에서는 특정 월에 차이가 집중된 경우 그 월도 함께 짚어준다.
+    const feeOrgRows = scope.feeByOrg.filter((r) => r.actual !== 0 || r.budget !== 0);
+    const feeOrgRemark = (r: (typeof feeOrgRows)[number]): string => {
+      const base = attributionRemark(
+        r.byAccount.map((a) => ({ label: stripAccountNumber(a.account), actual: a.actual, budget: a.budget })),
+        r.actual,
+        r.budget
+      );
+      return base + feeOrgMonthNote(r.monthly, r.actual - r.budget);
+    };
+    const feeOrgTotalAct = feeOrgRows.filter((r) => r.level === 0).reduce((s, r) => s + r.actual, 0);
+    const feeOrgTotalBud = feeOrgRows.filter((r) => r.level === 0).reduce((s, r) => s + r.budget, 0);
     setHtml(
       "feeTable",
       table5(
-        fees.map((f) => row(f.account, f.actual, f.budget, "", undefined, feeRemark(f))).join("") +
-          row("지급수수료 합계", fees.reduce((s, f) => s + f.actual, 0), fees.reduce((s, f) => s + f.budget, 0), "tot", undefined, ""),
-        "구분",
+        feeOrgRows.map((r) => row(r.org, r.actual, r.budget, r.level === 1 ? "fee-sub" : "", undefined, feeOrgRemark(r))).join("") +
+          row("합계", feeOrgTotalAct, feeOrgTotalBud, "tot", undefined, ""),
+        "조직",
         "비고"
       )
     );

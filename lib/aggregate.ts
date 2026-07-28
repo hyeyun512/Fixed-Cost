@@ -7,6 +7,7 @@ import type {
   CategoryRow,
   CategoryByHq,
   FeeRow,
+  FeeOrgRow,
   EvcsBlock,
   EvcsCatRow,
   Trend,
@@ -532,6 +533,56 @@ export async function loadDashboardData(): Promise<DashboardData> {
     return { budget: buildAllocationBoard(budRows), actual: buildAllocationBoard(actRows) };
   }
 
+  /** actSubset/budSubset(둘 다 이미 조직 기준으로 필터링됨)에서 지급수수료 계열 4개 대계정 합계 한 행을 만든다. */
+  function feeOrgRow(label: string, level: 0 | 1, actSubset: Row[], budSubset: Row[]): FeeOrgRow {
+    const feeAct = actSubset.filter((r) => r.category === "지급수수료" && r.main_account_re);
+    const feeBud = budSubset.filter((r) => r.category === "지급수수료" && r.main_account_re);
+    const actual = feeAct.reduce((s, r) => s + n(r.amount_krw), 0);
+    const budget = feeBud.reduce((s, r) => s + n(r.amount_krw), 0);
+
+    const accAct = new Map<string, number>();
+    const accBud = new Map<string, number>();
+    for (const r of feeAct) accAct.set(r.main_account_re!, (accAct.get(r.main_account_re!) || 0) + n(r.amount_krw));
+    for (const r of feeBud) accBud.set(r.main_account_re!, (accBud.get(r.main_account_re!) || 0) + n(r.amount_krw));
+    const accounts = new Set([...accAct.keys(), ...accBud.keys()]);
+    const byAccount = feeOrder
+      .filter((a) => accounts.has(a))
+      .map((a) => ({ account: a, actual: accAct.get(a) || 0, budget: accBud.get(a) || 0 }));
+
+    const moAct = new Map<string, number>();
+    const moBud = new Map<string, number>();
+    for (const r of feeAct) moAct.set(r.month, (moAct.get(r.month) || 0) + n(r.amount_krw));
+    for (const r of feeBud) moBud.set(r.month, (moBud.get(r.month) || 0) + n(r.amount_krw));
+    const monthsSeen = new Set([...moAct.keys(), ...moBud.keys()]);
+    const monthly = [...monthsSeen]
+      .sort((a, b) => monthNum(a) - monthNum(b))
+      .map((m) => ({ month: m, actual: moAct.get(m) || 0, budget: moBud.get(m) || 0 }));
+
+    return { org: label, level, actual, budget, byAccount, monthly };
+  }
+  /** 조직별(본사 5개 부문 + Staff부문 하위 대조직 + 법인) 지급수수료 계열 상세. */
+  function feeByOrgForRows(actRows: Row[], budRows: Row[]): FeeOrgRow[] {
+    const out: FeeOrgRow[] = [];
+    const hqAct = actRows.filter((r) => effectiveAllocHq(r) === "본사");
+    const hqBud = budRows.filter((r) => effectiveAllocHq(r) === "본사");
+    for (const dept of hqDeptOrder) {
+      const deptAct = hqAct.filter((r) => (r.report_use_re || "미분류") === dept);
+      const deptBud = hqBud.filter((r) => (r.report_use_re || "미분류") === dept);
+      out.push(feeOrgRow(dept, 0, deptAct, deptBud));
+      if (dept === "5. Staff부문") {
+        for (const sub of staffSubOrder) {
+          const subAct = deptAct.filter((r) => (r.large_org || "미분류") === sub);
+          const subBud = deptBud.filter((r) => (r.large_org || "미분류") === sub);
+          out.push(feeOrgRow(STAFF_SUBORG_LABEL[sub] || sub, 1, subAct, subBud));
+        }
+      }
+    }
+    const corpAct = actRows.filter((r) => effectiveAllocHq(r) === "법인");
+    const corpBud = budRows.filter((r) => effectiveAllocHq(r) === "법인");
+    out.push(feeOrgRow("법인", 0, corpAct, corpBud));
+    return out;
+  }
+
   const byMonth: Record<string, MonthBlock> = {};
   for (let i = 0; i < months.length; i++) {
     const m = months[i];
@@ -546,6 +597,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
       category: categoryForRows(actM, budM),
       categoryByHq: categoryByHqForRows(actM, budM),
       fee: feeForRows(actM, budM),
+      feeByOrg: feeByOrgForRows(actM, budM),
       evcs: evcsForRows(actM, budM),
       mainAccountByHq: mainAccountByHqForRows(actM, budM),
       allocationBoard: allocationBoardForRows(actM, budM),
@@ -554,6 +606,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
         category: categoryForRows(actCum, budCum),
         categoryByHq: categoryByHqForRows(actCum, budCum),
         fee: feeForRows(actCum, budCum),
+        feeByOrg: feeByOrgForRows(actCum, budCum),
         evcs: evcsForRows(actCum, budCum),
         mainAccountByHq: mainAccountByHqForRows(actCum, budCum),
         allocationBoard: allocationBoardForRows(actCum, budCum),

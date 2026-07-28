@@ -191,7 +191,10 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         </div>
         <div id="feeInsight" />
         <div className="tbl-box">
-          <div className="tbl-hd">구분(re)별 지급수수료 현황 <span className="sub">외주개발용역비, 지급수수료, 인증대행료 등</span></div>
+          <div className="tbl-hd">
+            조직별 지급수수료 현황{" "}
+            <span className="sub">대상 계정: 지급수수료, 외주개발용역비, 인증대행료, 특허처리비 · 본사 부문별(Staff부문은 대조직까지 세분화) · 법인</span>
+          </div>
           <div id="feeTable" />
         </div>
       </div>
