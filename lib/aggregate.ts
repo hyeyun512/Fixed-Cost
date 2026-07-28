@@ -168,7 +168,10 @@ export async function loadDashboardData(): Promise<DashboardData> {
     return acc.replace(/^\d+\s*/, "");
   }
 
-  function sumByHqDept(rows: Row[]): { map: Map<string, SummaryRow>; byAccount: Map<string, Map<string, number>> } {
+  function sumByHqDept(
+    rows: Row[],
+    amountOf: (r: Row) => number
+  ): { map: Map<string, SummaryRow>; byAccount: Map<string, Map<string, number>> } {
     const map = new Map<string, SummaryRow>();
     const byAccount = new Map<string, Map<string, number>>();
     for (const r of rows) {
@@ -176,11 +179,11 @@ export async function loadDashboardData(): Promise<DashboardData> {
       const dept = r.report_use_re || "미분류";
       const key = hq + "|" + dept;
       const cur = map.get(key) || { hq_corp: hq, dept, actual: 0, budget: 0, byMainAccount: [] };
-      cur.actual += n(r.amount_krw);
+      cur.actual += amountOf(r);
       map.set(key, cur);
       if (r.main_account_re) {
         const am = byAccount.get(key) || new Map<string, number>();
-        am.set(r.main_account_re, (am.get(r.main_account_re) || 0) + n(r.amount_krw));
+        am.set(r.main_account_re, (am.get(r.main_account_re) || 0) + amountOf(r));
         byAccount.set(key, am);
       }
     }
@@ -189,27 +192,31 @@ export async function loadDashboardData(): Promise<DashboardData> {
   function addBudgetToMap(
     map: Map<string, SummaryRow>,
     byAccount: Map<string, Map<string, number>>,
-    rows: Row[]
+    rows: Row[],
+    amountOf: (r: Row) => number
   ) {
     for (const r of rows) {
       const hq = r.hq_corp || "기타";
       const dept = r.report_use_re || "미분류";
       const key = hq + "|" + dept;
       const cur = map.get(key) || { hq_corp: hq, dept, actual: 0, budget: 0, byMainAccount: [] };
-      cur.budget += n(r.amount_krw);
+      cur.budget += amountOf(r);
       map.set(key, cur);
       if (r.main_account_re) {
         const am = byAccount.get(key) || new Map<string, number>();
-        am.set(r.main_account_re, (am.get(r.main_account_re) || 0) + n(r.amount_krw));
+        am.set(r.main_account_re, (am.get(r.main_account_re) || 0) + amountOf(r));
         byAccount.set(key, am);
       }
     }
   }
 
-  function summaryForRows(actRows: Row[], budRows: Row[]): SummaryBlock {
-    const { map, byAccount: actByAccount } = sumByHqDept(actRows);
+  const amountKrwOf = (r: Row) => n(r.amount_krw);
+  const evcsKrwOf = (r: Row) => n(r.evcs_domestic_krw) + n(r.evcs_overseas_krw);
+
+  function summaryForRowsWith(actRows: Row[], budRows: Row[], amountOf: (r: Row) => number): SummaryBlock {
+    const { map, byAccount: actByAccount } = sumByHqDept(actRows, amountOf);
     const budByAccount = new Map<string, Map<string, number>>();
-    addBudgetToMap(map, budByAccount, budRows);
+    addBudgetToMap(map, budByAccount, budRows, amountOf);
     for (const [key, sr] of map) {
       const accounts = new Set<string>([...(actByAccount.get(key)?.keys() || []), ...(budByAccount.get(key)?.keys() || [])]);
       sr.byMainAccount = [...accounts].map((acc) => ({
@@ -233,6 +240,14 @@ export async function loadDashboardData(): Promise<DashboardData> {
       budget: rows.reduce((s, r) => s + r.budget, 0),
     };
     return { rows, hq_totals, total };
+  }
+  function summaryForRows(actRows: Row[], budRows: Row[]): SummaryBlock {
+    return summaryForRowsWith(actRows, budRows, amountKrwOf);
+  }
+  // EVCS 배부금액(국내+해외 합산) 기준으로 같은 모양(SummaryBlock)의 본사/법인/구분(re)/대계정 집계를 만든다.
+  // Summary 탭과 동일한 드릴다운 요약 로직을 EVCS 탭에서도 그대로 재사용하기 위함.
+  function evcsSummaryForRows(actRows: Row[], budRows: Row[]): SummaryBlock {
+    return summaryForRowsWith(actRows, budRows, evcsKrwOf);
   }
 
   function categoryForRows(actRows: Row[], budRows: Row[], hq?: string): CategoryRow[] {
@@ -401,6 +416,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
       total: { domestic: { actual: totA.dom, budget: totB.dom }, overseas: { actual: totA.ovs, budget: totB.ovs } },
       byCategory,
       categoryByHq,
+      evcsSummary: evcsSummaryForRows(actRows, budRows),
       certAgency: {
         domestic: { actual: certA.dom, budget: certB.dom },
         overseas: { actual: certA.ovs, budget: certB.ovs },

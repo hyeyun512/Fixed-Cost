@@ -1,7 +1,7 @@
 "use client";
 
 import { Chart, registerables } from "chart.js";
-import type { DashboardData, CategoryRow, FeeRow, MainAccountRow, AllocationRow, AllocValues13 } from "./types";
+import type { DashboardData, CategoryRow, FeeRow, MainAccountRow, AllocationRow, AllocValues13, SummaryBlock } from "./types";
 
 Chart.register(...registerables);
 
@@ -62,48 +62,6 @@ export function initDashboard(data: DashboardData): () => void {
   function rateBadgeCell(rate: number | null): string {
     return `<span class="kbadge ${badgeClass(rate)}">${badgeLabel(rate)}</span>`;
   }
-  /**
-   * 집행률만 극단적이고 금액은 미미한 항목이 1순위로 뽑히지 않도록,
-   * "집행률 괴리 정도"와 "차이 금액(백만원)"을 함께 곱해 중요도를 매긴다.
-   * 예: 예산1/실적5(500%, 차이 4원)보다 예산10억/실적12억(120%, 차이 2억)이 더 중요한 이슈다.
-   */
-  function gapScore(rate: number | null, diff: number): number {
-    if (rate === null) return -Infinity;
-    if (rate === Infinity) return Infinity;
-    return (Math.abs(diff) / 1e6) * (Math.abs(rate - 100) / 100);
-  }
-  type GapItem<T> = T & { rate: number | null; diff: number };
-  /** 이미 rate/diff가 계산된 목록 중 gapScore가 가장 큰 항목을 찾는다(over/under를 미리 나눠 각각 호출할 때 사용). */
-  function maxByGap<T extends { rate: number | null; diff: number }>(items: T[]): T | null {
-    let best: T | null = null;
-    for (const it of items) {
-      if (it.rate === null) continue;
-      if (!best || gapScore(it.rate, it.diff) > gapScore(best.rate, best.diff)) best = it;
-    }
-    return best;
-  }
-  /** 항목들 중 "집행률 괴리 × 금액 차이"가 가장 큰(=경영상 가장 중요한) 항목을 찾는다. */
-  function topGap<T extends { actual: number; budget: number }>(items: T[]): GapItem<T> | null {
-    let best: GapItem<T> | null = null;
-    let bestScore = -Infinity;
-    for (const it of items) {
-      const rate = rateOf(it.actual, it.budget);
-      const diff = it.actual - it.budget;
-      const score = gapScore(rate, diff);
-      if (score > bestScore) {
-        bestScore = score;
-        best = { ...it, rate, diff };
-      }
-    }
-    return best;
-  }
-  /** "OO (110%, 예산 대비 +80백만원 초과)" 형태의 괴리 설명 문구. */
-  function describeGap(label: string, g: { rate: number | null; diff: number }): string {
-    if (g.rate === Infinity) return `${label} (예산 없이 ${fmtM(g.diff)}백만원 집행)`;
-    if (g.rate === null) return label;
-    const over = g.diff > 0;
-    return `${label} (${badgeLabel(g.rate)}, 예산 대비 ${over ? "+" : ""}${fmtM(g.diff)}백만원 ${over ? "초과" : "미집행"})`;
-  }
   /** 비고에 "유의미한 차이"로 볼 최소 금액. 본사/법인 모두 동일 기준 적용. */
   const REMARK_MIN_DIFF_WON = 30_000_000;
   /**
@@ -129,6 +87,62 @@ export function initDashboard(data: DashboardData): () => void {
   /** "11 급여" -> "급여"처럼 대계정(re) 코드 앞자리 숫자를 뗀 표시용 이름. */
   function stripAccountNumber(acc: string): string {
     return acc.replace(/^\d+\s*/, "");
+  }
+  /**
+   * 요약 코멘트 공통 생성기. Summary/계정별/EVCS 탭 모두 이 순서로 원인을 추적한다:
+   * 총합계 집행률 확인 → 본사/법인 중 괴리가 큰 쪽 확인 → 그 안에서 구분(re, 부서/법인사) 확인 → 그 구분의 주요 대계정 확인.
+   * (계정별 탭은 SummaryBlock을, EVCS 탭은 evcsSummary(EVCS 배부금 기준 SummaryBlock)를 그대로 재사용한다.)
+   */
+  function drillDownSummary(scopeLabel: string, s: SummaryBlock): string {
+    const rate = rateOf(s.total.actual, s.total.budget);
+    const overallText =
+      rate === null
+        ? "집행 실적이 아직 없습니다"
+        : rate === Infinity
+        ? "예산 없이 집행이 발생했습니다"
+        : `전체 집행률은 ${Math.round(rate)}%로 ${rate > 105 ? "예산을 다소 초과" : rate < 95 ? "예산 대비 여유 있게" : "예산 범위 내에서 양호하게"} 집행되었습니다`;
+
+    const sides = (["본사", "법인"] as const)
+      .map((hq) => {
+        const t = s.hq_totals[hq] || { actual: 0, budget: 0 };
+        return { hq, actual: t.actual, budget: t.budget, diff: t.actual - t.budget, rate: rateOf(t.actual, t.budget) };
+      })
+      .filter((h) => h.rate !== null && (h.rate === Infinity || Math.abs(h.rate - 100) >= 5) && Math.abs(h.diff) >= REMARK_MIN_DIFF_WON)
+      .sort((a, b) => b.diff - a.diff);
+
+    if (!sides.length) {
+      return `<b>${scopeLabel} 전사 실적</b> — ${overallText}. 본사 · 법인 모두 예산 범위 내에서 안정적으로 관리되고 있습니다.`;
+    }
+
+    const sentences = sides.map((h) => {
+      const over = h.diff > 0;
+      const deptRows = s.rows
+        .filter((r) => r.hq_corp === h.hq)
+        .map((r) => ({ ...r, diff: r.actual - r.budget }))
+        .filter((r) => (over ? r.diff > 0 : r.diff < 0))
+        .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
+        .slice(0, 2);
+
+      if (!deptRows.length) {
+        return `<b>${h.hq}</b>은 ${badgeLabel(h.rate)} 집행률로 ${over ? "예산을 초과" : "예산에 미달"} 집행했습니다 (${over ? "+" : ""}${fmtM(h.diff)}백만원).`;
+      }
+
+      const parts = deptRows.map((d) => {
+        const topAccs = d.byMainAccount
+          .map((a) => ({ label: stripAccountNumber(a.account), diff: a.actual - a.budget }))
+          .filter((a) => Math.sign(a.diff) === Math.sign(d.diff))
+          .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
+          .slice(0, 2)
+          .map((a) => a.label);
+        return topAccs.length ? `${d.dept}의 ${topAccs.join(", ")}` : d.dept;
+      });
+
+      return over
+        ? `<b>${h.hq}</b>은 ${parts.join(", ")} 집행이 주요 원인으로 예산 대비 <b>+${fmtM(h.diff)}백만원 초과</b> 집행했습니다.`
+        : `<b>${h.hq}</b>은 ${parts.join(", ")} 집행 미달로 예산 대비 <b>${fmtM(h.diff)}백만원</b> 절감되었습니다.`;
+    });
+
+    return `<b>${scopeLabel} 전사 실적</b> — ${overallText}. ${sentences.join(" ")}`;
   }
   /** 전월 대비 증감 배지 (당월 보기에서만 의미가 있음). */
   function momBadgeHtml(current: number, previous: number | null): string {
@@ -500,23 +514,11 @@ export function initDashboard(data: DashboardData): () => void {
           <span class="kbadge ${badgeClass(rate)}">${badgeLabel(rate)}</span></div>`
     );
 
-    // 경영진 요약 코멘트: 전사 집행 상태 + "집행률 괴리가 크면서 금액도 유의미한" 부서/계정과목 한눈에 보기
-    // (단순 집행률 최고/최저가 아니라, 괴리율×금액을 함께 고려 — 예산 1원짜리가 500%를 찍어도 의미 없음)
-    const deptGap = topGap(s.rows.map((r) => ({ label: r.dept, actual: r.actual, budget: r.budget })));
-    const catGap = topGap(scope.category.map((c) => ({ label: c.category, actual: c.actual, budget: c.budget })));
-    const rateText =
-      rate === null
-        ? "집행 실적이 아직 없습니다"
-        : rate === Infinity
-        ? "예산이 없는 상태에서 집행이 발생했습니다"
-        : `집행률 ${Math.round(rate)}%로 ${rate > 110 ? "예산을 초과 집행" : rate < 70 ? "예산 대비 여유 있게 집행" : "예산 범위 내에서 안정적으로 집행"}되고 있습니다`;
-    const insightParts = [`<b>${scopeLabel()} 전사 실적</b> — ${rateText}.`];
-    if (deptGap) insightParts.push(`예산과의 괴리가 가장 큰 부서는 <b>${describeGap(deptGap.label, deptGap)}</b>입니다.`);
-    if (catGap) insightParts.push(`계정과목 중에서는 <b>${describeGap(catGap.label, catGap)}</b>의 괴리가 커 확인이 필요합니다.`);
+    // 경영진 요약 코멘트: 총합계 → 본사/법인 → 구분(re) → 대계정 순으로 원인을 추적한다.
     const isAlert = rate !== null && (rate === Infinity || rate > 130);
     setHtml(
       "summaryInsight",
-      `<div class="callout ${isAlert ? "alert" : "info"}"><div class="ic">${isAlert ? "⚠️" : "📌"}</div><div>${insightParts.join(" ")}</div></div>`
+      `<div class="callout ${isAlert ? "alert" : "info"}"><div class="ic">${isAlert ? "⚠️" : "📌"}</div><div>${drillDownSummary(scopeLabel(), s)}</div></div>`
     );
 
     // 신규: 월별 실적 추이 콤보 차트 (항상 전체 월 범위, 당월 기준)
@@ -591,6 +593,7 @@ export function initDashboard(data: DashboardData): () => void {
   function renderCategory() {
     CHART_BUILDERS["category"] = [];
     const scope = getScope();
+    const s = scope.summary;
     const cats = scope.category;
     const catHq = scope.categoryByHq;
     const fees = scope.fee;
@@ -617,19 +620,8 @@ export function initDashboard(data: DashboardData): () => void {
       barChart("categoryChart", cats.map((c) => c.category), cats.map((c) => c.actual), cats.map((c) => c.budget))
     );
 
-    // 집행률만 보지 않고 "괴리율 × 금액"이 큰 구분을 뽑는다 (금액이 미미하면 집행률이 튀어도 후순위).
-    const catsWithGap = cats.map((c) => ({ ...c, rate: rateOf(c.actual, c.budget), diff: c.actual - c.budget }));
-    const topOver = maxByGap(catsWithGap.filter((c) => c.diff > 0));
-    const topUnder = maxByGap(catsWithGap.filter((c) => c.diff < 0));
-    if (topOver || topUnder) {
-      const sentences: string[] = [];
-      if (topOver) sentences.push(`초과 폭이 가장 큰 구분은 <b>${describeGap(topOver.category, topOver)}</b>입니다.`);
-      if (topUnder) sentences.push(`미집행 폭이 가장 큰 구분은 <b>${describeGap(topUnder.category, topUnder)}</b>입니다.`);
-      setHtml(
-        "catInsight",
-        `<div class="callout info"><div class="ic">💡</div><div><b>${scopeLabel()} 요약</b> — ${sentences.join(" ")}</div></div>`
-      );
-    }
+    // 경영진 요약 코멘트: 총합계 → 본사/법인 → 구분(re) → 대계정 순으로 원인을 추적한다 (Summary 탭과 동일한 로직).
+    setHtml("catInsight", `<div class="callout info"><div class="ic">💡</div><div>${drillDownSummary(scopeLabel(), s)}</div></div>`);
 
     // 대계정별 상세: 구분(카테고리) 컬럼을 추가하고, 구분별 상세와 같은 순서로 대계정을 묶어서 보여준다.
     // 차이 금액이 유의미할 때만, 원인이 되는 구분(부서) 1~2개를 "구분 +차이금액"으로 뽑는다.
@@ -779,15 +771,11 @@ export function initDashboard(data: DashboardData): () => void {
     setHtml("evcsLegend", legendHtml([[C_BUDGET, "예산"], [C_ACTUAL, "실적"]]));
     queueChart("evcs", "evcsChart", () => barChart("evcsChart", ["국내", "해외"], [domA, ovsA], [domB, ovsB]));
 
-    const domRate = rateOf(domA, domB),
-      ovsRate = rateOf(ovsA, ovsB);
-    const domHigher = domRate !== null && domRate !== Infinity && domRate > 110;
-    const ovsHigher = ovsRate !== null && ovsRate !== Infinity && ovsRate > 110;
-    let insightMsg = `EVCS는 당사 주력 사업부로 ${scopeLabel()} 기준 해외 비중이 ${Math.round((ovsA / (totA || 1)) * 100)}%를 차지합니다.`;
-    if (domHigher || ovsHigher) {
-      insightMsg += ` ${domHigher ? "국내" : ""}${domHigher && ovsHigher ? ", " : ""}${ovsHigher ? "해외" : ""} 집행률이 예산 대비 110%를 초과했습니다.`;
-    }
-    setHtml("evcsInsight", `<div class="callout info"><div class="ic">🔋</div><div>${insightMsg}</div></div>`);
+    // 경영진 요약 코멘트: 총합계 → 본사/법인 → 구분(re) → 대계정 순으로 원인을 추적한다 (EVCS 배부금액 기준).
+    setHtml(
+      "evcsInsight",
+      `<div class="callout info"><div class="ic">🔋</div><div>${drillDownSummary(scopeLabel(), e.evcsSummary)}</div></div>`
+    );
 
     const cd = e.certAgency.domestic,
       co = e.certAgency.overseas;
