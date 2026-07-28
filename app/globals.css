@@ -67,7 +67,7 @@ body{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif;b
 .pl-tbl .sec td{background:#f8fafc}
 .pl-tbl .sec td:first-child{font-weight:700;color:#1a202c}
 .pl-tbl .badge-cell{text-align:right}
-.pl-tbl .remark-cell{text-align:left;white-space:normal;font-size:11.5px;color:#64748b;max-width:220px}
+.pl-tbl .remark-cell{text-align:center;white-space:normal;font-size:11.5px;color:#64748b;max-width:220px}
 .pl-tbl .fee-sub td:first-child{padding-left:26px;color:#64748b;font-size:12px}
 .pl-tbl.alloc-tbl th,.pl-tbl.alloc-tbl td{padding:8px 10px}
 .pl-tbl.alloc-tbl .alloc-tot-col{background:#eff6ff}

@@ -21,6 +21,7 @@ export type FeeRow = { account: string; actual: number; budget: number; byDept: 
 
 export type FeeOrgMonthRow = { month: string; actual: number; budget: number };
 export type FeeOrgAccountRow = { account: string; actual: number; budget: number };
+export type FeeOrgCompanyRow = { company: string; actual: number; budget: number };
 /** 조직(부문/법인) 기준 지급수수료 계열(지급수수료·외주개발용역비·인증대행료·특허처리비 합계) 집계. */
 export type FeeOrgRow = {
   org: string;
@@ -31,6 +32,8 @@ export type FeeOrgRow = {
   byAccount: FeeOrgAccountRow[];
   /** 누계 보기에서 차이가 특정 월에 집중되었는지 판단하기 위한 월별 내역. */
   monthly: FeeOrgMonthRow[];
+  /** 법인 행에서만 채워지는 소속사별 내역 — 비고에서 차이의 원인이 되는 법인을 짚어주기 위함. */
+  byCompany?: FeeOrgCompanyRow[];
 };
 
 export type EvcsCatRow = {

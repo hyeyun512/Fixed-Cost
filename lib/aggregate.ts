@@ -534,7 +534,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
   }
 
   /** actSubset/budSubset(둘 다 이미 조직 기준으로 필터링됨)에서 지급수수료 계열 4개 대계정 합계 한 행을 만든다. */
-  function feeOrgRow(label: string, level: 0 | 1, actSubset: Row[], budSubset: Row[]): FeeOrgRow {
+  function feeOrgRow(label: string, level: 0 | 1, actSubset: Row[], budSubset: Row[], groupByCompany = false): FeeOrgRow {
     const feeAct = actSubset.filter((r) => r.category === "지급수수료" && r.main_account_re);
     const feeBud = budSubset.filter((r) => r.category === "지급수수료" && r.main_account_re);
     const actual = feeAct.reduce((s, r) => s + n(r.amount_krw), 0);
@@ -558,7 +558,27 @@ export async function loadDashboardData(): Promise<DashboardData> {
       .sort((a, b) => monthNum(a) - monthNum(b))
       .map((m) => ({ month: m, actual: moAct.get(m) || 0, budget: moBud.get(m) || 0 }));
 
-    return { org: label, level, actual, budget, byAccount, monthly };
+    let byCompany: FeeOrgRow["byCompany"];
+    if (groupByCompany) {
+      const coAct = new Map<string, number>();
+      const coBud = new Map<string, number>();
+      for (const r of feeAct) {
+        const co = r.report_use_re || r.company || "미분류";
+        coAct.set(co, (coAct.get(co) || 0) + n(r.amount_krw));
+      }
+      for (const r of feeBud) {
+        const co = r.report_use_re || r.company || "미분류";
+        coBud.set(co, (coBud.get(co) || 0) + n(r.amount_krw));
+      }
+      const companies = new Set([...coAct.keys(), ...coBud.keys()]);
+      byCompany = orderedUnique(companies, PREFERRED_CORP_COMPANY_ORDER).map((c) => ({
+        company: c,
+        actual: coAct.get(c) || 0,
+        budget: coBud.get(c) || 0,
+      }));
+    }
+
+    return { org: label, level, actual, budget, byAccount, monthly, byCompany };
   }
   /** 조직별(본사 5개 부문 + Staff부문 하위 대조직 + 법인) 지급수수료 계열 상세. */
   function feeByOrgForRows(actRows: Row[], budRows: Row[]): FeeOrgRow[] {
@@ -579,7 +599,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     }
     const corpAct = actRows.filter((r) => effectiveAllocHq(r) === "법인");
     const corpBud = budRows.filter((r) => effectiveAllocHq(r) === "법인");
-    out.push(feeOrgRow("법인", 0, corpAct, corpBud));
+    out.push(feeOrgRow("법인", 0, corpAct, corpBud, true));
     return out;
   }
 

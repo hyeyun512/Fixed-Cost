@@ -700,7 +700,11 @@ export function initDashboard(data: DashboardData): () => void {
         r.actual,
         r.budget
       );
-      return base + feeOrgMonthNote(r.monthly, r.actual - r.budget);
+      // 법인 행은 대계정뿐 아니라, 차이의 실제 원인이 되는 소속사도 함께 짚어준다.
+      const companyNote = r.byCompany
+        ? attributionRemark(r.byCompany.map((c) => ({ label: c.company, actual: c.actual, budget: c.budget })), r.actual, r.budget)
+        : "";
+      return [base, companyNote].filter(Boolean).join(", ") + feeOrgMonthNote(r.monthly, r.actual - r.budget);
     };
     const feeOrgTotalAct = feeOrgRows.filter((r) => r.level === 0).reduce((s, r) => s + r.actual, 0);
     const feeOrgTotalBud = feeOrgRows.filter((r) => r.level === 0).reduce((s, r) => s + r.budget, 0);
