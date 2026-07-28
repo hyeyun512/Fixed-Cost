@@ -476,7 +476,7 @@ export function initDashboard(data: DashboardData): () => void {
       <td class="badge-cell">${rateBadgeCell(rate)}</td>${remarkCell}</tr>`;
   }
   function table5(rowsHtml: string, firstColLabel = "구분", extraColLabel?: string): string {
-    const extraTh = extraColLabel === undefined ? "" : `<th>${extraColLabel}</th>`;
+    const extraTh = extraColLabel === undefined ? "" : `<th class="remark-th">${extraColLabel}</th>`;
     return `<table class="pl-tbl"><thead><tr><th>${firstColLabel}</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th>${extraTh}</tr></thead><tbody>${rowsHtml}</tbody></table>`;
   }
   /** 예산/실적/차이/집행률 4칸 한 세트 (병렬 배치 표에서 그룹 하나를 이룬다). */
@@ -536,7 +536,7 @@ export function initDashboard(data: DashboardData): () => void {
       <td${diffCls(totDiff)}>${totDiff >= 0 ? "+" : ""}${fmtM(totDiff)}</td>
       <td class="badge-cell">${rateBadgeCell(rateOf(totA, totB))}</td>
       <td></td></tr>`;
-    return `<table class="pl-tbl"><thead><tr><th>구분</th><th>대계정</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th><th>비고</th></tr></thead><tbody>${bodyRows}${totRow}</tbody></table>`;
+    return `<table class="pl-tbl"><thead><tr><th>구분</th><th>대계정</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th><th class="remark-th">비고</th></tr></thead><tbody>${bodyRows}${totRow}</tbody></table>`;
   }
 
   // ================= SUMMARY TAB =================
