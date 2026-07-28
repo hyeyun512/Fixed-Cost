@@ -25,7 +25,7 @@ const HQ_ORDER: Record<string, number> = { 본사: 0, 법인: 1 };
 const PREFERRED_HQ_DEPT_ORDER = ["1. 사업 그룹", "2. 개발 그룹", "3. SCM 부문", "4. Media그룹", "5. Staff부문"];
 const PREFERRED_STAFF_SUBORG_ORDER = ["CEO", "Staff(CEO)", "경영지원실", "HR실"];
 const STAFF_SUBORG_LABEL: Record<string, string> = { HR실: "HR팀" };
-const PREFERRED_CORP_COMPANY_ORDER = ["HUS", "HMX", "HUK", "HDG", "HUG", "HTH", "HBR", "HJP", "HAU", "HID", "HSZ"];
+const PREFERRED_CORP_COMPANY_ORDER = ["HUS", "HMX", "HUK", "HDG", "HUG", "HTR", "HBR", "HJP", "HTH", "HAU", "HID", "HSZ"];
 
 type Row = {
   month: string;
