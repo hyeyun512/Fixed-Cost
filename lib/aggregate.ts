@@ -16,6 +16,8 @@ import type {
   MainAccountByHq,
   AllocationRow,
   AllocationBoard,
+  AllocValues13,
+  AllocAccountValues,
 } from "./types";
 
 const BUDGET_TABLE = "26년 예산(BP)";
@@ -379,9 +381,26 @@ export async function loadDashboardData(): Promise<DashboardData> {
         certB.ovs += n(r.evcs_overseas_krw);
       }
     }
+    // 구분별 EVCS 배부금액(국내+해외 합산)을 본사/법인 기준으로도 집계 (구분별 상세 표용).
+    const evcsAmountByCategory = (rows: Row[], hq?: string): Map<string, number> => {
+      const sum = new Map<string, number>();
+      for (const r of rows) {
+        if (!r.category) continue;
+        if (hq && (r.hq_corp || "기타") !== hq) continue;
+        sum.set(r.category, (sum.get(r.category) || 0) + n(r.evcs_domestic_krw) + n(r.evcs_overseas_krw));
+      }
+      return sum;
+    };
+    const evcsCategoryRows = (hq?: string): CategoryRow[] => {
+      const act = evcsAmountByCategory(actRows, hq);
+      const bud = evcsAmountByCategory(budRows, hq);
+      return catOrder.map((c) => ({ category: c, actual: act.get(c) || 0, budget: bud.get(c) || 0 }));
+    };
+    const categoryByHq: CategoryByHq = { 총합계: evcsCategoryRows(), 본사: evcsCategoryRows("본사"), 법인: evcsCategoryRows("법인") };
     return {
       total: { domestic: { actual: totA.dom, budget: totB.dom }, overseas: { actual: totA.ovs, budget: totB.ovs } },
       byCategory,
+      categoryByHq,
       certAgency: {
         domestic: { actual: certA.dom, budget: certB.dom },
         overseas: { actual: certA.ovs, budget: certB.ovs },
@@ -389,7 +408,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     };
   }
 
-  function allocationRow(label: string, level: 0 | 1 | 2, rows: Row[]): AllocationRow {
+  function sumAllocFields(rows: Row[]): AllocValues13 {
     let stb = 0,
       mobility = 0,
       evcsDomestic = 0,
@@ -418,27 +437,35 @@ export async function loadDashboardData(): Promise<DashboardData> {
       holdings += n(r.holdings_krw);
       hNetworks += n(r.h_networks_krw);
     }
-    const humaxTotal = stb + mobility + evcsDomestic + evcsOverseas + humaxCommon;
-    const sharedTotal = hMobility + hEv + hiparking + peoplecar + winercom + holdings + hNetworks;
+    return { stb, mobility, evcsDomestic, evcsOverseas, humaxCommon, building, hMobility, hEv, hiparking, peoplecar, winercom, holdings, hNetworks };
+  }
+
+  function allocationRow(label: string, level: 0 | 1 | 2, rows: Row[]): AllocationRow {
+    const v = sumAllocFields(rows);
+    const humaxTotal = v.stb + v.mobility + v.evcsDomestic + v.evcsOverseas + v.humaxCommon;
+    const sharedTotal = v.hMobility + v.hEv + v.hiparking + v.peoplecar + v.winercom + v.holdings + v.hNetworks;
+
+    // 이 행의 금액이 어느 대계정(re)에서 왔는지 (Diff 표 툴팁의 "원인 대계정" 표기에 쓰인다).
+    const byAccountMap = new Map<string, Row[]>();
+    for (const r of rows) {
+      const acc = r.main_account_re || "미분류";
+      const list = byAccountMap.get(acc);
+      if (list) list.push(r);
+      else byAccountMap.set(acc, [r]);
+    }
+    const byAccount: AllocAccountValues[] = [...byAccountMap.entries()].map(([account, accRows]) => ({
+      account,
+      ...sumAllocFields(accRows),
+    }));
+
     return {
       label,
       level,
-      stb,
-      mobility,
-      evcsDomestic,
-      evcsOverseas,
-      humaxCommon,
+      ...v,
       humaxTotal,
-      building,
-      hMobility,
-      hEv,
-      hiparking,
-      peoplecar,
-      winercom,
-      holdings,
-      hNetworks,
       sharedTotal,
-      grandTotal: humaxTotal + building + sharedTotal,
+      grandTotal: humaxTotal + v.building + sharedTotal,
+      byAccount,
     };
   }
 

@@ -77,10 +77,13 @@ body{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif;b
 .pl-tbl.alloc-tbl .alloc-l2 td:first-child{padding-left:42px;color:#64748b;font-size:12px}
 .pl-tbl.alloc-tbl .alloc-sticky{position:sticky;left:0;background:#fff;z-index:1;box-shadow:1px 0 0 #e2e8f0;white-space:nowrap;min-width:110px}
 .pl-tbl.alloc-tbl .tot .alloc-sticky{background:#f8fafc}
+.pl-tbl.alloc-tbl .alloc-diff-hint{cursor:help;text-decoration:underline dotted;text-underline-offset:3px}
 .alloc-scroll{overflow-x:auto;max-width:100%}
 .pl-tbl.parallel-tbl th.grp-total{background:#eff6ff;color:#1d4ed8}
 .pl-tbl.parallel-tbl th.grp-hq{background:#e0e7ff;color:#3730a3;border-left:1px solid #c7d2fe}
 .pl-tbl.parallel-tbl th.grp-corp{background:#fce7f3;color:#9d174d;border-left:1px solid #fbcfe8}
+.pl-tbl.alloc-tbl thead tr:first-child th,
+.pl-tbl.parallel-tbl thead tr:first-child th{text-align:center}
 .pl-tbl.parallel-tbl thead tr:nth-child(2) th:nth-child(5),
 .pl-tbl.parallel-tbl tbody td:nth-child(6){border-left:1px solid #e2e8f0}
 .pl-tbl.parallel-tbl thead tr:nth-child(2) th:nth-child(9),

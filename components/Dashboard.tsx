@@ -358,6 +358,15 @@ export default function Dashboard({ data }: { data: DashboardData }) {
             <div id="allocActualTable" />
           </div>
         </div>
+
+        <div className="section-lead">
+          Diff(실적-예산) 배부 현황<span className="sub" id="allocDiffSub" />
+        </div>
+        <div className="tbl-box">
+          <div className="alloc-scroll">
+            <div id="allocDiffTable" />
+          </div>
+        </div>
       </div>
 
       <footer>

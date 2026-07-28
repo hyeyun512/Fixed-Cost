@@ -1,7 +1,7 @@
 "use client";
 
 import { Chart, registerables } from "chart.js";
-import type { DashboardData, CategoryRow, FeeRow, MainAccountRow, AllocationRow } from "./types";
+import type { DashboardData, CategoryRow, FeeRow, MainAccountRow, AllocationRow, AllocValues13 } from "./types";
 
 Chart.register(...registerables);
 
@@ -764,12 +764,12 @@ export function initDashboard(data: DashboardData): () => void {
       "evcsCatTable",
       parallelTable(
         "구분",
-        ["총합계", "국내", "해외"],
-        e.byCategory.map((c) => ({
+        ["총합계", "본사", "법인"],
+        e.categoryByHq.총합계.map((c, i) => ({
           label: c.category,
-          total: { actual: c.dom_actual + c.ovs_actual, budget: c.dom_budget + c.ovs_budget },
-          b: { actual: c.dom_actual, budget: c.dom_budget },
-          c: { actual: c.ovs_actual, budget: c.ovs_budget },
+          total: c,
+          b: e.categoryByHq.본사[i],
+          c: e.categoryByHq.법인[i],
         })),
         "전체 합계"
       )
@@ -891,6 +891,106 @@ export function initDashboard(data: DashboardData): () => void {
     setHtml("allocBudgetTable", allocTable(board.budget, {}));
     setText("allocActualSub", scopeLabel() + " · 백만원");
     setHtml("allocActualTable", allocTable(board.actual, { showRate: true, budgetRows: board.budget }));
+    setText("allocDiffSub", scopeLabel() + " · 백만원 · 값에 마우스를 올리면 원인 대계정이 표시됩니다");
+    setHtml("allocDiffTable", allocDiffTable(board.actual, board.budget));
+  }
+
+  const ALLOC_FIELDS: (keyof AllocValues13)[] = [
+    "stb",
+    "mobility",
+    "evcsDomestic",
+    "evcsOverseas",
+    "humaxCommon",
+    "building",
+    "hMobility",
+    "hEv",
+    "hiparking",
+    "peoplecar",
+    "winercom",
+    "holdings",
+    "hNetworks",
+  ];
+  function escAttr(s: string): string {
+    return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  }
+  /** 실적행/예산행의 대계정별 내역을 대계정명 -> 필드별 차이(diff)로 합쳐준다. */
+  function accountDiffMap(actualRow: AllocationRow, budgetRow: AllocationRow): Map<string, AllocValues13> {
+    const actualByAcc = new Map(actualRow.byAccount.map((a) => [a.account, a]));
+    const budgetByAcc = new Map(budgetRow.byAccount.map((a) => [a.account, a]));
+    const accounts = new Set([...actualByAcc.keys(), ...budgetByAcc.keys()]);
+    const map = new Map<string, AllocValues13>();
+    for (const acc of accounts) {
+      const a = actualByAcc.get(acc);
+      const b = budgetByAcc.get(acc);
+      const diffs = {} as AllocValues13;
+      for (const f of ALLOC_FIELDS) diffs[f] = (a?.[f] || 0) - (b?.[f] || 0);
+      map.set(acc, diffs);
+    }
+    return map;
+  }
+  /** 특정 필드(들) 합산 기준 차이가 큰 대계정 상위 2개 + "그 외"를 "계정명 +/-N백만" 형태로 나열. */
+  function diffTooltip(map: Map<string, AllocValues13>, fields: (keyof AllocValues13)[]): string {
+    const entries = [...map.entries()]
+      .map(([account, v]) => ({ account, diff: fields.reduce((s, f) => s + v[f], 0) }))
+      .filter((e) => e.diff !== 0)
+      .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+    if (!entries.length) return "";
+    const top = entries.slice(0, 2);
+    const parts = top.map((e) => `${e.account} ${e.diff >= 0 ? "+" : ""}${fmtM(e.diff)}백만`);
+    if (entries.length > 2) {
+      const rest = entries.slice(2).reduce((s, e) => s + e.diff, 0);
+      parts.push(`그 외 ${rest >= 0 ? "+" : ""}${fmtM(rest)}백만`);
+    }
+    return parts.join(", ");
+  }
+  /** Diff(실적-예산) 표: 배부 현황 표와 같은 배치지만, 값에 마우스를 올리면 원인 대계정 내역이 뜬다. */
+  function allocDiffTable(actualRows: AllocationRow[], budgetRows: AllocationRow[]): string {
+    const budgetByLabel = new Map(budgetRows.map((b) => [b.label, b]));
+    const pairs = actualRows
+      .map((a) => {
+        const b = budgetByLabel.get(a.label);
+        return b ? { a, b } : null;
+      })
+      .filter((x): x is { a: AllocationRow; b: AllocationRow } => x !== null)
+      .filter(({ a, b }) => a.level === 0 || !isAllocRowEmpty({ ...a, ...diffOf(a, b) } as AllocationRow));
+
+    let html =
+      `<table class="pl-tbl alloc-tbl"><thead>` +
+      `<tr><th rowspan="2">Company</th><th rowspan="2" class="alloc-tot-col">(A+B+C)<br>차이</th>` +
+      `<th colspan="6" class="grp-a">(A) Humax</th><th rowspan="2">(B)<br>건물</th><th colspan="8" class="grp-c">(C) Shared</th></tr>` +
+      `<tr><th>합계</th><th>STB</th><th>Mobility</th><th>EVCS(국내)</th><th>EVCS(해외)</th><th>Humax(공통)</th>` +
+      `<th>합계</th><th>H.Mobility</th><th>H.EV</th><th>하이파킹</th><th>피플카</th><th>위너콤</th><th>홀딩스</th><th>H.Networks</th></tr>` +
+      `</thead><tbody>`;
+    pairs.forEach(({ a, b }) => {
+      const d = diffOf(a, b);
+      const accMap = accountDiffMap(a, b);
+      const cell = (v: number, fields: (keyof AllocValues13)[], extraClass = ""): string => {
+        const tip = diffTooltip(accMap, fields);
+        const signClass = v > 0 ? "neg" : v < 0 ? "pos" : "";
+        const cls = [extraClass, signClass, tip ? "alloc-diff-hint" : ""].filter(Boolean).join(" ");
+        return `<td class="${cls}"${tip ? ` title="${escAttr(tip)}"` : ""}>${v >= 0 ? "+" : ""}${fmtM(v)}</td>`;
+      };
+      const rowClass = a.level === 0 ? "tot" : a.level === 1 ? "alloc-l1" : "alloc-l2";
+      html +=
+        `<tr class="${rowClass}"><td class="alloc-sticky">${a.label}</td>` +
+        `${cell(d.grandTotal, ALLOC_FIELDS, "alloc-tot-col")}` +
+        `${cell(d.humaxTotal, ["stb", "mobility", "evcsDomestic", "evcsOverseas", "humaxCommon"])}` +
+        `${cell(d.stb, ["stb"])}${cell(d.mobility, ["mobility"])}${cell(d.evcsDomestic, ["evcsDomestic"])}${cell(d.evcsOverseas, ["evcsOverseas"])}${cell(d.humaxCommon, ["humaxCommon"])}` +
+        `${cell(d.building, ["building"])}` +
+        `${cell(d.sharedTotal, ["hMobility", "hEv", "hiparking", "peoplecar", "winercom", "holdings", "hNetworks"], "alloc-shared-col")}` +
+        `${cell(d.hMobility, ["hMobility"])}${cell(d.hEv, ["hEv"])}${cell(d.hiparking, ["hiparking"])}${cell(d.peoplecar, ["peoplecar"])}${cell(d.winercom, ["winercom"])}${cell(d.holdings, ["holdings"])}${cell(d.hNetworks, ["hNetworks"])}` +
+        `</tr>`;
+    });
+    html += "</tbody></table>";
+    return html;
+  }
+  function diffOf(a: AllocationRow, b: AllocationRow): AllocValues13 & { humaxTotal: number; sharedTotal: number; grandTotal: number } {
+    const out = {} as AllocValues13 & { humaxTotal: number; sharedTotal: number; grandTotal: number };
+    for (const f of ALLOC_FIELDS) out[f] = a[f] - b[f];
+    out.humaxTotal = a.humaxTotal - b.humaxTotal;
+    out.sharedTotal = a.sharedTotal - b.sharedTotal;
+    out.grandTotal = a.grandTotal - b.grandTotal;
+    return out;
   }
 
   function renderAll() {

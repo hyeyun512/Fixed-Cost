@@ -29,6 +29,8 @@ export type EvcsCatRow = {
 export type EvcsBlock = {
   total: { domestic: AB; overseas: AB };
   byCategory: EvcsCatRow[];
+  /** 구분별 EVCS 배부금액(국내+해외 합산)을 본사/법인 기준으로 나눈 값. */
+  categoryByHq: CategoryByHq;
   certAgency: { domestic: AB; overseas: AB };
 };
 
@@ -44,19 +46,13 @@ export type MainAccountRow = {
 };
 export type MainAccountByHq = { 본사: MainAccountRow[]; 법인: MainAccountRow[] };
 
-/** 배부판 한 행: 회사/부문 기준으로 STB~H.Networks 13개 배부 사업부의 배부후금액을 모두 더한 값. */
-export type AllocationRow = {
-  label: string;
-  /** 0=본사/법인/Total(볼드), 1=부문/법인사, 2=Staff부문 하위조직 — 표시 들여쓰기에 사용. */
-  level: 0 | 1 | 2;
+/** 배부판의 13개 기본 배부 사업부 금액 (STB~H.Networks, 그룹 합계는 별도 필드). */
+export type AllocValues13 = {
   stb: number;
   mobility: number;
   evcsDomestic: number;
   evcsOverseas: number;
   humaxCommon: number;
-  /** (A) Humax 합계 = stb+mobility+evcsDomestic+evcsOverseas+humaxCommon */
-  humaxTotal: number;
-  /** (B) 건물 */
   building: number;
   hMobility: number;
   hEv: number;
@@ -65,10 +61,22 @@ export type AllocationRow = {
   winercom: number;
   holdings: number;
   hNetworks: number;
+};
+/** 대계정(re) 하나가 이 행의 배부 금액에 기여한 몫 (Diff 표 툴팁에서 원인 분석용). */
+export type AllocAccountValues = AllocValues13 & { account: string };
+/** 배부판 한 행: 회사/부문 기준으로 STB~H.Networks 13개 배부 사업부의 배부후금액을 모두 더한 값. */
+export type AllocationRow = AllocValues13 & {
+  label: string;
+  /** 0=본사/법인/Total(볼드), 1=부문/법인사, 2=Staff부문 하위조직 — 표시 들여쓰기에 사용. */
+  level: 0 | 1 | 2;
+  /** (A) Humax 합계 = stb+mobility+evcsDomestic+evcsOverseas+humaxCommon */
+  humaxTotal: number;
   /** (C) Shared 합계 = hMobility+hEv+hiparking+peoplecar+winercom+holdings+hNetworks */
   sharedTotal: number;
   /** (A+B+C) 총합계 */
   grandTotal: number;
+  /** 이 행의 금액을 만들어낸 대계정(re)별 내역 — Diff 표에서 "무엇 때문에 차이가 났는지" 툴팁에 쓴다. */
+  byAccount: AllocAccountValues[];
 };
 export type AllocationBoard = { budget: AllocationRow[]; actual: AllocationRow[] };
 
