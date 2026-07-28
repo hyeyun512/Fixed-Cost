@@ -62,6 +62,9 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         <div className="tab" data-tab="evcs">
           ③ EVCS
         </div>
+        <div className="tab" data-tab="alloc">
+          ④ 배부판
+        </div>
       </div>
 
       {/* ===================== SUMMARY TAB ===================== */}
@@ -328,6 +331,27 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           </div>
           <div className="chart-wrap-lg">
             <canvas id="certComboChart" />
+          </div>
+        </div>
+      </div>
+
+      {/* ===================== ALLOCATION BOARD TAB ===================== */}
+      <div id="tab-alloc" className="content">
+        <div className="section-lead">
+          예산(BP) 배부 현황<span className="sub" id="allocBudgetSub" />
+        </div>
+        <div className="tbl-box">
+          <div className="tbl-scroll">
+            <div id="allocBudgetTable" />
+          </div>
+        </div>
+
+        <div className="section-lead">
+          실적 배부 현황<span className="sub" id="allocActualSub" />
+        </div>
+        <div className="tbl-box">
+          <div className="tbl-scroll">
+            <div id="allocActualTable" />
           </div>
         </div>
       </div>

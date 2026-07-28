@@ -44,6 +44,34 @@ export type MainAccountRow = {
 };
 export type MainAccountByHq = { 본사: MainAccountRow[]; 법인: MainAccountRow[] };
 
+/** 배부판 한 행: 회사/부문 기준으로 STB~H.Networks 13개 배부 사업부의 배부후금액을 모두 더한 값. */
+export type AllocationRow = {
+  label: string;
+  /** 0=본사/법인/Total(볼드), 1=부문/법인사, 2=Staff부문 하위조직 — 표시 들여쓰기에 사용. */
+  level: 0 | 1 | 2;
+  stb: number;
+  mobility: number;
+  evcsDomestic: number;
+  evcsOverseas: number;
+  humaxCommon: number;
+  /** (A) Humax 합계 = stb+mobility+evcsDomestic+evcsOverseas+humaxCommon */
+  humaxTotal: number;
+  /** (B) 건물 */
+  building: number;
+  hMobility: number;
+  hEv: number;
+  hiparking: number;
+  peoplecar: number;
+  winercom: number;
+  holdings: number;
+  hNetworks: number;
+  /** (C) Shared 합계 = hMobility+hEv+hiparking+peoplecar+winercom+holdings+hNetworks */
+  sharedTotal: number;
+  /** (A+B+C) 총합계 */
+  grandTotal: number;
+};
+export type AllocationBoard = { budget: AllocationRow[]; actual: AllocationRow[] };
+
 export type MonthBlock = {
   summary: SummaryBlock;
   category: CategoryRow[];
@@ -51,6 +79,7 @@ export type MonthBlock = {
   fee: FeeRow[];
   evcs: EvcsBlock;
   mainAccountByHq: MainAccountByHq;
+  allocationBoard: AllocationBoard;
   cumulative: {
     summary: SummaryBlock;
     category: CategoryRow[];
@@ -58,6 +87,7 @@ export type MonthBlock = {
     fee: FeeRow[];
     evcs: EvcsBlock;
     mainAccountByHq: MainAccountByHq;
+    allocationBoard: AllocationBoard;
     label: string;
   };
 };

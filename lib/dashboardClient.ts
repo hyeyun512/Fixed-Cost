@@ -1,7 +1,7 @@
 "use client";
 
 import { Chart, registerables } from "chart.js";
-import type { DashboardData, CategoryRow, FeeRow, MainAccountRow } from "./types";
+import type { DashboardData, CategoryRow, FeeRow, MainAccountRow, AllocationRow } from "./types";
 
 Chart.register(...registerables);
 
@@ -802,11 +802,47 @@ export function initDashboard(data: DashboardData): () => void {
     );
   }
 
+  // ================= ALLOCATION BOARD TAB =================
+  function allocTable(rows: AllocationRow[], opts: { showRate?: boolean; budgetRows?: AllocationRow[] }): string {
+    const rateHeader = opts.showRate ? "<th>집행률</th>" : "";
+    let html =
+      `<table class="pl-tbl alloc-tbl"><thead><tr>` +
+      `<th>Company</th><th class="alloc-tot-col">(A+B+C)<br>합계</th>${rateHeader}` +
+      `<th>(A)<br>Humax합계</th><th>STB</th><th>Mobility</th><th>EVCS(국내)</th><th>EVCS(해외)</th><th>Humax(공통)</th>` +
+      `<th>(B)<br>건물</th><th>(C)<br>Shared합계</th>` +
+      `<th>H.Mobility</th><th>H.EV</th><th>하이파킹</th><th>피플카</th><th>위너콤</th><th>홀딩스</th><th>H.Networks</th>` +
+      `</tr></thead><tbody>`;
+    rows.forEach((r, i) => {
+      const rowClass = r.level === 0 ? "tot" : r.level === 1 ? "alloc-l1" : "alloc-l2";
+      let rateCell = "";
+      if (opts.showRate) {
+        const b = opts.budgetRows?.[i];
+        rateCell = `<td class="badge-cell">${rateBadgeCell(b ? rateOf(r.grandTotal, b.grandTotal) : null)}</td>`;
+      }
+      html +=
+        `<tr class="${rowClass}"><td>${r.label}</td><td class="alloc-tot-col">${fmtM(r.grandTotal)}</td>${rateCell}` +
+        `<td>${fmtM(r.humaxTotal)}</td><td>${fmtM(r.stb)}</td><td>${fmtM(r.mobility)}</td><td>${fmtM(r.evcsDomestic)}</td><td>${fmtM(r.evcsOverseas)}</td><td>${fmtM(r.humaxCommon)}</td>` +
+        `<td>${fmtM(r.building)}</td><td>${fmtM(r.sharedTotal)}</td>` +
+        `<td>${fmtM(r.hMobility)}</td><td>${fmtM(r.hEv)}</td><td>${fmtM(r.hiparking)}</td><td>${fmtM(r.peoplecar)}</td><td>${fmtM(r.winercom)}</td><td>${fmtM(r.holdings)}</td><td>${fmtM(r.hNetworks)}</td></tr>`;
+    });
+    html += "</tbody></table>";
+    return html;
+  }
+  function renderAlloc() {
+    const scope = getScope();
+    const board = scope.allocationBoard;
+    setText("allocBudgetSub", scopeLabel() + " · 백만원");
+    setHtml("allocBudgetTable", allocTable(board.budget, {}));
+    setText("allocActualSub", scopeLabel() + " · 백만원");
+    setHtml("allocActualTable", allocTable(board.actual, { showRate: true, budgetRows: board.budget }));
+  }
+
   function renderAll() {
     setText("topbarMeta", `단위: 백만원 · 기준월: ${currentMonth} · 보기: ${currentMode === "month" ? "당월" : "누계(YTD)"}`);
     renderSummary();
     renderCategory();
     renderEvcs();
+    renderAlloc();
   }
 
   // ============ init controls ============

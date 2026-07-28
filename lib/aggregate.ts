@@ -14,26 +14,45 @@ import type {
   FullTrendPoint,
   MainAccountRow,
   MainAccountByHq,
+  AllocationRow,
+  AllocationBoard,
 } from "./types";
 
 const BUDGET_TABLE = "26년 예산(BP)";
 const PREFERRED_CATEGORY_ORDER = ["인건비", "지급수수료", "감가상각비", "기타", "광고선전비", "여비교통비"];
 const PREFERRED_FEE_ORDER = ["29 지급수수료", "40 외주개발용역비", "41 인증대행료", "42 특허처리비"];
 const HQ_ORDER: Record<string, number> = { 본사: 0, 법인: 1 };
+const PREFERRED_HQ_DEPT_ORDER = ["1. 사업 그룹", "2. 개발 그룹", "3. SCM 부문", "4. Media그룹", "5. Staff부문"];
+const PREFERRED_STAFF_SUBORG_ORDER = ["CEO", "Staff(CEO)", "경영지원실", "HR실"];
+const STAFF_SUBORG_LABEL: Record<string, string> = { HR실: "HR팀" };
+const PREFERRED_CORP_COMPANY_ORDER = ["HUS", "HMX", "HUK", "HDG", "HUG", "HTH", "HBR", "HJP", "HAU", "HID", "HSZ"];
 
 type Row = {
   month: string;
   hq_corp: string | null;
   report_use_re: string | null;
+  company: string | null;
+  large_org: string | null;
   category: string | null;
   main_account_re: string | null;
   amount_krw: number | null;
   evcs_domestic_krw: number | null;
   evcs_overseas_krw: number | null;
+  stb_krw: number | null;
+  mobility_krw: number | null;
+  humax_common_krw: number | null;
+  building_krw: number | null;
+  h_mobility_krw: number | null;
+  h_ev_krw: number | null;
+  hiparking_krw: number | null;
+  peoplecar_krw: number | null;
+  winercom_krw: number | null;
+  holdings_krw: number | null;
+  h_networks_krw: number | null;
 };
 
 const COLUMNS =
-  "month,hq_corp,report_use_re,category,main_account_re,amount_krw,evcs_domestic_krw,evcs_overseas_krw";
+  "month,hq_corp,report_use_re,company,large_org,category,main_account_re,amount_krw,evcs_domestic_krw,evcs_overseas_krw,stb_krw,mobility_krw,humax_common_krw,building_krw,h_mobility_krw,h_ev_krw,hiparking_krw,peoplecar_krw,winercom_krw,holdings_krw,h_networks_krw";
 
 async function fetchAllRows(
   table: string,
@@ -104,6 +123,25 @@ export async function loadDashboardData(): Promise<DashboardData> {
   }
   const catOrder = orderedUnique(categorySet, PREFERRED_CATEGORY_ORDER);
   const feeOrder = orderedUnique(feeSet, PREFERRED_FEE_ORDER);
+
+  // 배부판 행 구조 (본사 부문 / Staff부문 하위조직 / 법인 소속사) — 연간 전체 데이터 기준으로 한 번만 산출.
+  const hqDeptSet = new Set<string>();
+  const staffSubSet = new Set<string>();
+  const corpCompanySet = new Set<string>();
+  for (const r of [...actualRows, ...budgetRows]) {
+    const hq = r.hq_corp || "기타";
+    if (hq === "본사" && r.report_use_re) {
+      hqDeptSet.add(r.report_use_re);
+      if (r.report_use_re === "5. Staff부문" && r.large_org) staffSubSet.add(r.large_org);
+    }
+    if (hq === "법인") {
+      const co = r.report_use_re || r.company;
+      if (co) corpCompanySet.add(co);
+    }
+  }
+  const hqDeptOrder = orderedUnique(hqDeptSet, PREFERRED_HQ_DEPT_ORDER);
+  const staffSubOrder = orderedUnique(staffSubSet, PREFERRED_STAFF_SUBORG_ORDER);
+  const corpCompanyOrder = orderedUnique(corpCompanySet, PREFERRED_CORP_COMPANY_ORDER);
 
   // 대계정(re) -> 구분(category) 매핑 (한 대계정은 하나의 구분에만 속함).
   const mainAccountCategory = new Map<string, string>();
@@ -351,6 +389,86 @@ export async function loadDashboardData(): Promise<DashboardData> {
     };
   }
 
+  function allocationRow(label: string, level: 0 | 1 | 2, rows: Row[]): AllocationRow {
+    let stb = 0,
+      mobility = 0,
+      evcsDomestic = 0,
+      evcsOverseas = 0,
+      humaxCommon = 0,
+      building = 0,
+      hMobility = 0,
+      hEv = 0,
+      hiparking = 0,
+      peoplecar = 0,
+      winercom = 0,
+      holdings = 0,
+      hNetworks = 0;
+    for (const r of rows) {
+      stb += n(r.stb_krw);
+      mobility += n(r.mobility_krw);
+      evcsDomestic += n(r.evcs_domestic_krw);
+      evcsOverseas += n(r.evcs_overseas_krw);
+      humaxCommon += n(r.humax_common_krw);
+      building += n(r.building_krw);
+      hMobility += n(r.h_mobility_krw);
+      hEv += n(r.h_ev_krw);
+      hiparking += n(r.hiparking_krw);
+      peoplecar += n(r.peoplecar_krw);
+      winercom += n(r.winercom_krw);
+      holdings += n(r.holdings_krw);
+      hNetworks += n(r.h_networks_krw);
+    }
+    const humaxTotal = stb + mobility + evcsDomestic + evcsOverseas + humaxCommon;
+    const sharedTotal = hMobility + hEv + hiparking + peoplecar + winercom + holdings + hNetworks;
+    return {
+      label,
+      level,
+      stb,
+      mobility,
+      evcsDomestic,
+      evcsOverseas,
+      humaxCommon,
+      humaxTotal,
+      building,
+      hMobility,
+      hEv,
+      hiparking,
+      peoplecar,
+      winercom,
+      holdings,
+      hNetworks,
+      sharedTotal,
+      grandTotal: humaxTotal + building + sharedTotal,
+    };
+  }
+
+  function buildAllocationBoard(rows: Row[]): AllocationRow[] {
+    const board: AllocationRow[] = [];
+    const hqRows = rows.filter((r) => (r.hq_corp || "기타") === "본사");
+    board.push(allocationRow("본사(HKR)", 0, hqRows));
+    for (const dept of hqDeptOrder) {
+      const deptRows = hqRows.filter((r) => (r.report_use_re || "미분류") === dept);
+      board.push(allocationRow(dept, 1, deptRows));
+      if (dept === "5. Staff부문") {
+        for (const sub of staffSubOrder) {
+          const subRows = deptRows.filter((r) => (r.large_org || "미분류") === sub);
+          board.push(allocationRow(STAFF_SUBORG_LABEL[sub] || sub, 2, subRows));
+        }
+      }
+    }
+    const corpRows = rows.filter((r) => (r.hq_corp || "기타") === "법인");
+    board.push(allocationRow("법인", 0, corpRows));
+    for (const co of corpCompanyOrder) {
+      const coRows = corpRows.filter((r) => (r.report_use_re || r.company || "미분류") === co);
+      board.push(allocationRow(co, 1, coRows));
+    }
+    board.push(allocationRow("Total", 0, rows));
+    return board;
+  }
+  function allocationBoardForRows(actRows: Row[], budRows: Row[]): AllocationBoard {
+    return { budget: buildAllocationBoard(budRows), actual: buildAllocationBoard(actRows) };
+  }
+
   const byMonth: Record<string, MonthBlock> = {};
   for (let i = 0; i < months.length; i++) {
     const m = months[i];
@@ -367,6 +485,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
       fee: feeForRows(actM, budM),
       evcs: evcsForRows(actM, budM),
       mainAccountByHq: mainAccountByHqForRows(actM, budM),
+      allocationBoard: allocationBoardForRows(actM, budM),
       cumulative: {
         summary: summaryForRows(actCum, budCum),
         category: categoryForRows(actCum, budCum),
@@ -374,6 +493,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
         fee: feeForRows(actCum, budCum),
         evcs: evcsForRows(actCum, budCum),
         mainAccountByHq: mainAccountByHqForRows(actCum, budCum),
+        allocationBoard: allocationBoardForRows(actCum, budCum),
         label: i === 0 ? `${months[0]} (누계=당월과 동일)` : `${months[0]}~${m} 누계`,
       },
     };
