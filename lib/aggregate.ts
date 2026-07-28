@@ -5,6 +5,7 @@ import type {
   SummaryBlock,
   SummaryRow,
   CategoryRow,
+  CategoryByHq,
   FeeRow,
   EvcsBlock,
   EvcsCatRow,
@@ -103,13 +104,29 @@ export async function loadDashboardData(): Promise<DashboardData> {
   }
   const catOrder = orderedUnique(categorySet, PREFERRED_CATEGORY_ORDER);
   const feeOrder = orderedUnique(feeSet, PREFERRED_FEE_ORDER);
-  // 대계정(re)은 "11 급여"처럼 앞자리 숫자가 계정 코드라 코드 순으로 정렬한다.
+
+  // 대계정(re) -> 구분(category) 매핑 (한 대계정은 하나의 구분에만 속함).
+  const mainAccountCategory = new Map<string, string>();
+  for (const r of [...actualRows, ...budgetRows]) {
+    if (r.main_account_re && r.category && !mainAccountCategory.has(r.main_account_re)) {
+      mainAccountCategory.set(r.main_account_re, r.category);
+    }
+  }
+  const catRank = new Map(catOrder.map((c, i) => [c, i]));
+  // 대계정은 구분별 상세와 같은 구분 순서로 묶고, 같은 구분 내에서는 "11 급여"처럼 앞자리 숫자(계정 코드) 순으로 정렬한다.
   const mainAccountOrder = [...mainAccountSet].sort((a, b) => {
+    const ca = catRank.get(mainAccountCategory.get(a) || "") ?? 999;
+    const cb = catRank.get(mainAccountCategory.get(b) || "") ?? 999;
+    if (ca !== cb) return ca - cb;
     const na = parseInt(a, 10),
       nb = parseInt(b, 10);
     if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
     return a.localeCompare(b, "ko");
   });
+  // "11 급여" -> "급여"처럼 화면 표시용으로 앞자리 계정 코드를 뗀다.
+  function stripAccountNumber(acc: string): string {
+    return acc.replace(/^\d+\s*/, "");
+  }
 
   function sumByHqDept(rows: Row[]): { map: Map<string, SummaryRow>; byAccount: Map<string, Map<string, number>> } {
     const map = new Map<string, SummaryRow>();
@@ -178,24 +195,54 @@ export async function loadDashboardData(): Promise<DashboardData> {
     return { rows, hq_totals, total };
   }
 
-  function categoryForRows(actRows: Row[], budRows: Row[]): CategoryRow[] {
+  function categoryForRows(actRows: Row[], budRows: Row[], hq?: string): CategoryRow[] {
     const act = new Map<string, number>();
     const bud = new Map<string, number>();
-    for (const r of actRows) if (r.category) act.set(r.category, (act.get(r.category) || 0) + n(r.amount_krw));
-    for (const r of budRows) if (r.category) bud.set(r.category, (bud.get(r.category) || 0) + n(r.amount_krw));
+    for (const r of actRows)
+      if (r.category && (!hq || (r.hq_corp || "기타") === hq)) act.set(r.category, (act.get(r.category) || 0) + n(r.amount_krw));
+    for (const r of budRows)
+      if (r.category && (!hq || (r.hq_corp || "기타") === hq)) bud.set(r.category, (bud.get(r.category) || 0) + n(r.amount_krw));
     return catOrder.map((c) => ({ category: c, actual: act.get(c) || 0, budget: bud.get(c) || 0 }));
+  }
+  function categoryByHqForRows(actRows: Row[], budRows: Row[]): CategoryByHq {
+    return {
+      총합계: categoryForRows(actRows, budRows),
+      본사: categoryForRows(actRows, budRows, "본사"),
+      법인: categoryForRows(actRows, budRows, "법인"),
+    };
   }
 
   function feeForRows(actRows: Row[], budRows: Row[]): FeeRow[] {
     const act = new Map<string, number>();
     const bud = new Map<string, number>();
-    for (const r of actRows)
-      if (r.category === "지급수수료" && r.main_account_re)
-        act.set(r.main_account_re, (act.get(r.main_account_re) || 0) + n(r.amount_krw));
-    for (const r of budRows)
-      if (r.category === "지급수수료" && r.main_account_re)
-        bud.set(r.main_account_re, (bud.get(r.main_account_re) || 0) + n(r.amount_krw));
-    return feeOrder.map((a) => ({ account: a, actual: act.get(a) || 0, budget: bud.get(a) || 0 }));
+    // 지급수수료 대계정별로 어느 구분(re)이 실적/예산을 냈는지도 쌓아둔다 (비고란의 원인 부서 표기용).
+    const actByDept = new Map<string, Map<string, number>>();
+    const budByDept = new Map<string, Map<string, number>>();
+    for (const r of actRows) {
+      if (r.category !== "지급수수료" || !r.main_account_re) continue;
+      act.set(r.main_account_re, (act.get(r.main_account_re) || 0) + n(r.amount_krw));
+      const dept = r.report_use_re || "미분류";
+      const dm = actByDept.get(r.main_account_re) || new Map<string, number>();
+      dm.set(dept, (dm.get(dept) || 0) + n(r.amount_krw));
+      actByDept.set(r.main_account_re, dm);
+    }
+    for (const r of budRows) {
+      if (r.category !== "지급수수료" || !r.main_account_re) continue;
+      bud.set(r.main_account_re, (bud.get(r.main_account_re) || 0) + n(r.amount_krw));
+      const dept = r.report_use_re || "미분류";
+      const dm = budByDept.get(r.main_account_re) || new Map<string, number>();
+      dm.set(dept, (dm.get(dept) || 0) + n(r.amount_krw));
+      budByDept.set(r.main_account_re, dm);
+    }
+    return feeOrder.map((a) => {
+      const depts = new Set<string>([...(actByDept.get(a)?.keys() || []), ...(budByDept.get(a)?.keys() || [])]);
+      const byDept = [...depts].map((dept) => ({
+        dept,
+        actual: actByDept.get(a)?.get(dept) || 0,
+        budget: budByDept.get(a)?.get(dept) || 0,
+      }));
+      return { account: a, actual: act.get(a) || 0, budget: bud.get(a) || 0, byDept };
+    });
   }
 
   function mainAccountForHq(actRows: Row[], budRows: Row[], hq: string): MainAccountRow[] {
@@ -229,7 +276,14 @@ export async function loadDashboardData(): Promise<DashboardData> {
           actual: actByDept.get(a)?.get(dept) || 0,
           budget: budByDept.get(a)?.get(dept) || 0,
         }));
-        return { account: a, actual: act.get(a) || 0, budget: bud.get(a) || 0, byDept };
+        return {
+          account: a,
+          accountLabel: stripAccountNumber(a),
+          category: mainAccountCategory.get(a) || "",
+          actual: act.get(a) || 0,
+          budget: bud.get(a) || 0,
+          byDept,
+        };
       });
   }
   function mainAccountByHqForRows(actRows: Row[], budRows: Row[]): MainAccountByHq {
@@ -309,12 +363,14 @@ export async function loadDashboardData(): Promise<DashboardData> {
     byMonth[m] = {
       summary: summaryForRows(actM, budM),
       category: categoryForRows(actM, budM),
+      categoryByHq: categoryByHqForRows(actM, budM),
       fee: feeForRows(actM, budM),
       evcs: evcsForRows(actM, budM),
       mainAccountByHq: mainAccountByHqForRows(actM, budM),
       cumulative: {
         summary: summaryForRows(actCum, budCum),
         category: categoryForRows(actCum, budCum),
+        categoryByHq: categoryByHqForRows(actCum, budCum),
         fee: feeForRows(actCum, budCum),
         evcs: evcsForRows(actCum, budCum),
         mainAccountByHq: mainAccountByHqForRows(actCum, budCum),

@@ -46,13 +46,13 @@ export function initDashboard(data: DashboardData): () => void {
     if (budget === 0) return actual === 0 ? null : Infinity;
     return (actual / budget) * 100;
   }
+  // 전사 공통: 예산 초과 = 빨강, 예산 미달 = 파랑. 2가지 색상으로만 표기한다 (노랑/초록 제거).
   function badgeClass(rate: number | null): string {
     if (rate === null) return "bd-gray";
     if (rate === Infinity) return "bd-red";
-    if (rate > 130) return "bd-red";
-    if (rate > 110) return "bd-yellow";
-    if (rate < 70) return "bd-blue";
-    return "bd-green";
+    if (rate > 100) return "bd-red";
+    if (rate < 100) return "bd-blue";
+    return "bd-gray";
   }
   function badgeLabel(rate: number | null): string {
     if (rate === null) return "해당없음";
@@ -126,12 +126,16 @@ export function initDashboard(data: DashboardData): () => void {
       .map((c) => `<span class="${c.diff >= 0 ? "neg" : "pos"}">${c.label} ${c.diff >= 0 ? "+" : ""}${fmtM(c.diff)}백만원</span>`)
       .join(", ");
   }
+  /** "11 급여" -> "급여"처럼 대계정(re) 코드 앞자리 숫자를 뗀 표시용 이름. */
+  function stripAccountNumber(acc: string): string {
+    return acc.replace(/^\d+\s*/, "");
+  }
   /** 전월 대비 증감 배지 (당월 보기에서만 의미가 있음). */
   function momBadgeHtml(current: number, previous: number | null): string {
     if (!previous) return "";
     const momPct = ((current - previous) / previous) * 100;
     const up = momPct > 0;
-    return ` <span style="color:${up ? "#dc2626" : "#16a34a"};font-weight:600">${up ? "▲" : "▼"} 전월대비 ${Math.abs(Math.round(momPct))}%</span>`;
+    return ` <span style="color:${up ? "#dc2626" : "#2563eb"};font-weight:600">${up ? "▲" : "▼"} 전월대비 ${Math.abs(Math.round(momPct))}%</span>`;
   }
   function scopeLabel(): string {
     if (currentMode === "month") return currentMonth + " (당월)";
@@ -412,10 +416,11 @@ export function initDashboard(data: DashboardData): () => void {
       <span class="kbadge ${badgeClass(rate)}">집행률 ${badgeLabel(rate)}</span></div>`;
   }
 
+  const CHIP_CLASS: Record<string, string> = { 본사: "hq", 법인: "corp", 국내: "dom", 해외: "ovs" };
   function row(label: string, actual: number, budget: number, rowClass = "", hqChip?: string, remark?: string): string {
     const diff = actual - budget;
     const rate = rateOf(actual, budget);
-    const nameCell = hqChip ? `<span class="hq-chip ${hqChip === "본사" ? "hq" : "corp"}">${hqChip}</span>${label}` : label;
+    const nameCell = hqChip ? `<span class="hq-chip ${CHIP_CLASS[hqChip] || "corp"}">${hqChip}</span>${label}` : label;
     const remarkCell = remark === undefined ? "" : `<td class="remark-cell">${remark}</td>`;
     return `<tr class="${rowClass}"><td>${nameCell}</td>
       <td${cls(budget)}>${fmtM(budget)}</td><td${cls(actual)}>${fmtM(actual)}</td>
@@ -454,9 +459,9 @@ export function initDashboard(data: DashboardData): () => void {
         `<div class="kcard"><div class="kcard-bar" style="background:#94a3b8"></div>
           <div class="klabel">예산</div><div class="kval">${fmtM(b)}<span class="kunit"> 백만원</span></div>
           <div class="ksub">${scopeLabel()}</div></div>` +
-        `<div class="kcard"><div class="kcard-bar" style="background:${diff > 0 ? "#dc2626" : "#16a34a"}"></div>
+        `<div class="kcard"><div class="kcard-bar" style="background:${diff > 0 ? "#dc2626" : "#2563eb"}"></div>
           <div class="klabel">차이 금액 (실적-예산)</div>
-          <div class="kval" style="color:${diff > 0 ? "#dc2626" : "#16a34a"}">${diff >= 0 ? "+" : ""}${fmtM(diff)}<span class="kunit"> 백만원</span></div>
+          <div class="kval" style="color:${diff > 0 ? "#dc2626" : "#2563eb"}">${diff >= 0 ? "+" : ""}${fmtM(diff)}<span class="kunit"> 백만원</span></div>
           <div class="ksub">&nbsp;</div></div>` +
         `<div class="kcard"><div class="kcard-bar" style="background:#7c3aed"></div>
           <div class="klabel">집행률</div><div class="kval">${rate === null ? "-" : rate === Infinity ? "∞" : Math.round(rate) + "%"}</div>
@@ -536,7 +541,7 @@ export function initDashboard(data: DashboardData): () => void {
       const list = rows.filter((r) => r.hq_corp === hq);
       list.forEach((r) => {
         const remark = attributionRemark(
-          r.byMainAccount.map((a) => ({ label: a.account, actual: a.actual, budget: a.budget })),
+          r.byMainAccount.map((a) => ({ label: stripAccountNumber(a.account), actual: a.actual, budget: a.budget })),
           r.actual,
           r.budget
         );
@@ -554,17 +559,26 @@ export function initDashboard(data: DashboardData): () => void {
   function renderCategory() {
     CHART_BUILDERS["category"] = [];
     const scope = getScope();
-    const s = scope.summary;
     const cats = scope.category;
+    const catHq = scope.categoryByHq;
     const fees = scope.fee;
     setText("catTblSub", scopeLabel() + " · 백만원");
 
+    // 구분별 상세: 구분마다 총합계(볼드) 아래에 구성요소인 본사/법인을 나란히 보여준다.
+    const catRows = cats
+      .map((c) => {
+        const hq본사 = catHq.본사.find((x) => x.category === c.category) || { actual: 0, budget: 0 };
+        const hq법인 = catHq.법인.find((x) => x.category === c.category) || { actual: 0, budget: 0 };
+        return (
+          row(c.category, c.actual, c.budget, "tot") +
+          row(c.category, hq본사.actual, hq본사.budget, "", "본사") +
+          row(c.category, hq법인.actual, hq법인.budget, "", "법인")
+        );
+      })
+      .join("");
     setHtml(
       "categoryTable",
-      table5(
-        cats.map((c) => row(c.category, c.actual, c.budget)).join("") +
-          row("전체 합계", cats.reduce((s, c) => s + c.actual, 0), cats.reduce((s, c) => s + c.budget, 0), "tot")
-      )
+      table5(catRows + row("전체 합계", cats.reduce((s, c) => s + c.actual, 0), cats.reduce((s, c) => s + c.budget, 0), "tot"))
     );
     setHtml("catLegend", legendHtml([[C_BUDGET, "예산"], [C_ACTUAL, "실적"]]));
     queueChart("category", "categoryChart", () =>
@@ -585,11 +599,47 @@ export function initDashboard(data: DashboardData): () => void {
       );
     }
 
+    // 대계정별 상세: 구분(카테고리) 컬럼을 추가하고, 구분별 상세와 같은 순서로 대계정을 묶어서 보여준다.
+    // 차이 금액이 유의미할 때만, 원인이 되는 구분(부서) 1~2개를 "구분 +차이금액"으로 뽑는다.
+    const mainAccountRemark = (r: MainAccountRow): string =>
+      attributionRemark(r.byDept.map((d) => ({ label: d.dept, actual: d.actual, budget: d.budget })), r.actual, r.budget);
+
+    const mainAccountTable = (rows: MainAccountRow[]): string => {
+      const bodyRows = rows
+        .map((r) => {
+          const diff = r.actual - r.budget;
+          return `<tr><td>${r.category}</td><td>${r.accountLabel}</td>
+            <td${cls(r.budget)}>${fmtM(r.budget)}</td><td${cls(r.actual)}>${fmtM(r.actual)}</td>
+            <td${diffCls(diff)}>${diff >= 0 ? "+" : ""}${fmtM(diff)}</td>
+            <td class="badge-cell">${rateBadgeCell(rateOf(r.actual, r.budget))}</td>
+            <td class="remark-cell">${mainAccountRemark(r)}</td></tr>`;
+        })
+        .join("");
+      const totA = rows.reduce((sum, r) => sum + r.actual, 0);
+      const totB = rows.reduce((sum, r) => sum + r.budget, 0);
+      const totDiff = totA - totB;
+      const totRow = `<tr class="tot"><td colspan="2">대계정 합계</td>
+        <td>${fmtM(totB)}</td><td>${fmtM(totA)}</td>
+        <td${diffCls(totDiff)}>${totDiff >= 0 ? "+" : ""}${fmtM(totDiff)}</td>
+        <td class="badge-cell">${rateBadgeCell(rateOf(totA, totB))}</td>
+        <td></td></tr>`;
+      return `<table class="pl-tbl"><thead><tr><th>구분</th><th>대계정</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th><th>비고</th></tr></thead><tbody>${bodyRows}${totRow}</tbody></table>`;
+    };
+    setText("hqMainAccountTblSub", scopeLabel() + " · 백만원");
+    setHtml("hqMainAccountTable", mainAccountTable(scope.mainAccountByHq["본사"]));
+    setText("corpMainAccountTblSub", scopeLabel() + " · 백만원");
+    setHtml("corpMainAccountTable", mainAccountTable(scope.mainAccountByHq["법인"]));
+
+    // 지급수수료 상세 관리 (맨 아래 배치): 비고란에 차이의 주요 원인이 되는 구분(re) 표기
+    const feeRemark = (f: FeeRow): string =>
+      attributionRemark(f.byDept.map((d) => ({ label: d.dept, actual: d.actual, budget: d.budget })), f.actual, f.budget);
     setHtml(
       "feeTable",
       table5(
-        fees.map((f: FeeRow) => row(f.account, f.actual, f.budget)).join("") +
-          row("지급수수료 합계", fees.reduce((s, f) => s + f.actual, 0), fees.reduce((s, f) => s + f.budget, 0), "tot")
+        fees.map((f) => row(f.account, f.actual, f.budget, "", undefined, feeRemark(f))).join("") +
+          row("지급수수료 합계", fees.reduce((s, f) => s + f.actual, 0), fees.reduce((s, f) => s + f.budget, 0), "tot", undefined, ""),
+        "구분",
+        "비고"
       )
     );
     setHtml("feeLegend", legendHtml([[C_BUDGET, "예산"], [C_ACTUAL2, "실적"]]));
@@ -613,77 +663,6 @@ export function initDashboard(data: DashboardData): () => void {
         );
       }
     }
-
-    const feeAccounts = fees.map((f) => f.account);
-    const palette = ["#2563eb", "#0f172a", "#dc2626", "#d97706", "#16a34a", "#7c3aed"];
-    setHtml(
-      "feeTrendLegend",
-      legendLineHtml(
-        feeAccounts.flatMap((a, i) => [
-          { color: palette[i % palette.length], label: `${a} 예산`, dashed: true },
-          { color: palette[i % palette.length], label: `${a} 실적` },
-        ])
-      )
-    );
-    queueChart("category", "feeTrendChart", () =>
-      lineChartMulti(
-        "feeTrendChart",
-        months,
-        feeAccounts.flatMap((acc, i) => {
-          const series = trend.fee_by_account[acc] || [];
-          const color = palette[i % palette.length];
-          return [
-            {
-              label: `${acc} 예산`,
-              data: series.map((x) => x.budget),
-              borderColor: color,
-              borderDash: [5, 4],
-              backgroundColor: color,
-              tension: 0.3,
-              pointRadius: 2,
-            },
-            {
-              label: `${acc} 실적`,
-              data: series.map((x) => x.actual),
-              borderColor: color,
-              backgroundColor: color,
-              tension: 0.3,
-              pointRadius: 3,
-            },
-          ];
-        })
-      )
-    );
-
-    // 차이 금액이 유의미할 때만, 원인이 되는 구분(부서) 1~2개를 "구분 +차이금액"으로 뽑는다.
-    const mainAccountRemark = (r: MainAccountRow): string =>
-      attributionRemark(r.byDept.map((d) => ({ label: d.dept, actual: d.actual, budget: d.budget })), r.actual, r.budget);
-
-    const mainAccountTable = (rows: MainAccountRow[]): string => {
-      const bodyRows = rows
-        .map((r) => {
-          const diff = r.actual - r.budget;
-          return `<tr><td>${r.account}</td>
-            <td${cls(r.budget)}>${fmtM(r.budget)}</td><td${cls(r.actual)}>${fmtM(r.actual)}</td>
-            <td${diffCls(diff)}>${diff >= 0 ? "+" : ""}${fmtM(diff)}</td>
-            <td class="badge-cell">${rateBadgeCell(rateOf(r.actual, r.budget))}</td>
-            <td class="remark-cell">${mainAccountRemark(r)}</td></tr>`;
-        })
-        .join("");
-      const totA = rows.reduce((sum, r) => sum + r.actual, 0);
-      const totB = rows.reduce((sum, r) => sum + r.budget, 0);
-      const totDiff = totA - totB;
-      const totRow = `<tr class="tot"><td>대계정 합계</td>
-        <td>${fmtM(totB)}</td><td>${fmtM(totA)}</td>
-        <td${diffCls(totDiff)}>${totDiff >= 0 ? "+" : ""}${fmtM(totDiff)}</td>
-        <td class="badge-cell">${rateBadgeCell(rateOf(totA, totB))}</td>
-        <td></td></tr>`;
-      return `<table class="pl-tbl"><thead><tr><th>대계정</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th><th>비고</th></tr></thead><tbody>${bodyRows}${totRow}</tbody></table>`;
-    };
-    setText("hqMainAccountTblSub", scopeLabel() + " · 백만원");
-    setHtml("hqMainAccountTable", mainAccountTable(scope.mainAccountByHq["본사"]));
-    setText("corpMainAccountTblSub", scopeLabel() + " · 백만원");
-    setHtml("corpMainAccountTable", mainAccountTable(scope.mainAccountByHq["법인"]));
   }
 
   // ================= EVCS TAB =================
@@ -762,20 +741,21 @@ export function initDashboard(data: DashboardData): () => void {
     }
     setHtml("evcsInsight", `<div class="callout info"><div class="ic">🔋</div><div>${insightMsg}</div></div>`);
 
-    let catHtml = `<table class="pl-tbl"><thead><tr><th>구분</th><th>국내 예산</th><th>국내 실적</th><th>국내 차이</th><th>국내 집행률</th><th>해외 예산</th><th>해외 실적</th><th>해외 차이</th><th>해외 집행률</th></tr></thead><tbody>`;
-    e.byCategory.forEach((c) => {
-      const dr = rateOf(c.dom_actual, c.dom_budget);
-      const or_ = rateOf(c.ovs_actual, c.ovs_budget);
-      const domDiff = c.dom_actual - c.dom_budget;
-      const ovsDiff = c.ovs_actual - c.ovs_budget;
-      catHtml += `<tr><td>${c.category}</td>
-        <td${cls(c.dom_budget)}>${fmtM(c.dom_budget)}</td><td${cls(c.dom_actual)}>${fmtM(c.dom_actual)}</td>
-        <td${diffCls(domDiff)}>${domDiff >= 0 ? "+" : ""}${fmtM(domDiff)}</td><td class="badge-cell">${rateBadgeCell(dr)}</td>
-        <td${cls(c.ovs_budget)}>${fmtM(c.ovs_budget)}</td><td${cls(c.ovs_actual)}>${fmtM(c.ovs_actual)}</td>
-        <td${diffCls(ovsDiff)}>${ovsDiff >= 0 ? "+" : ""}${fmtM(ovsDiff)}</td><td class="badge-cell">${rateBadgeCell(or_)}</td></tr>`;
-    });
-    catHtml += "</tbody></table>";
-    setHtml("evcsCatTable", catHtml);
+    // 구분별 상세: 구분마다 합계(국내+해외, 볼드) 아래에 구성요소인 국내/해외를 나란히 보여준다.
+    const evcsCatRows = e.byCategory
+      .map((c) => {
+        const totActual = c.dom_actual + c.ovs_actual;
+        const totBudget = c.dom_budget + c.ovs_budget;
+        return (
+          row(c.category, totActual, totBudget, "tot") +
+          row(c.category, c.dom_actual, c.dom_budget, "", "국내") +
+          row(c.category, c.ovs_actual, c.ovs_budget, "", "해외")
+        );
+      })
+      .join("");
+    const evcsCatTotA = e.byCategory.reduce((s, c) => s + c.dom_actual + c.ovs_actual, 0);
+    const evcsCatTotB = e.byCategory.reduce((s, c) => s + c.dom_budget + c.ovs_budget, 0);
+    setHtml("evcsCatTable", table5(evcsCatRows + row("전체 합계", evcsCatTotA, evcsCatTotB, "tot")));
 
     const cd = e.certAgency.domestic,
       co = e.certAgency.overseas;

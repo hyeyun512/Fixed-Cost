@@ -15,7 +15,9 @@ export type SummaryBlock = {
 };
 
 export type CategoryRow = { category: string; actual: number; budget: number };
-export type FeeRow = { account: string; actual: number; budget: number };
+export type CategoryByHq = { 총합계: CategoryRow[]; 본사: CategoryRow[]; 법인: CategoryRow[] };
+export type FeeDeptRow = { dept: string; actual: number; budget: number };
+export type FeeRow = { account: string; actual: number; budget: number; byDept: FeeDeptRow[] };
 
 export type EvcsCatRow = {
   category: string;
@@ -31,18 +33,28 @@ export type EvcsBlock = {
 };
 
 export type MainAccountDeptRow = { dept: string; actual: number; budget: number };
-export type MainAccountRow = { account: string; actual: number; budget: number; byDept: MainAccountDeptRow[] };
+export type MainAccountRow = {
+  account: string;
+  /** 번호 접두어(예: "11 ")를 뺀 표시용 이름. */
+  accountLabel: string;
+  category: string;
+  actual: number;
+  budget: number;
+  byDept: MainAccountDeptRow[];
+};
 export type MainAccountByHq = { 본사: MainAccountRow[]; 법인: MainAccountRow[] };
 
 export type MonthBlock = {
   summary: SummaryBlock;
   category: CategoryRow[];
+  categoryByHq: CategoryByHq;
   fee: FeeRow[];
   evcs: EvcsBlock;
   mainAccountByHq: MainAccountByHq;
   cumulative: {
     summary: SummaryBlock;
     category: CategoryRow[];
+    categoryByHq: CategoryByHq;
     fee: FeeRow[];
     evcs: EvcsBlock;
     mainAccountByHq: MainAccountByHq;

@@ -166,6 +166,24 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         </div>
 
         <div className="section-lead">
+          대계정별 상세<span className="sub">본사 · 법인 각각 전체 대계정 기준 실적/예산 · 구분 순으로 묶어서 표시</span>
+        </div>
+        <div className="chart-2col">
+          <div className="tbl-box" style={{ marginBottom: 0 }}>
+            <div className="tbl-hd">
+              본사 대계정별 상세 <span className="sub" id="hqMainAccountTblSub" />
+            </div>
+            <div id="hqMainAccountTable" />
+          </div>
+          <div className="tbl-box" style={{ marginBottom: 0 }}>
+            <div className="tbl-hd">
+              법인 대계정별 상세 <span className="sub" id="corpMainAccountTblSub" />
+            </div>
+            <div id="corpMainAccountTable" />
+          </div>
+        </div>
+
+        <div className="section-lead">
           지급수수료 상세 관리<span className="sub">주요 계정 기준 · 어디서 더 쓰고 덜 쓰는지 확인</span>
         </div>
         <div id="feeInsight" />
@@ -185,36 +203,6 @@ export default function Dashboard({ data }: { data: DashboardData }) {
             <div className="chart-wrap-lg">
               <canvas id="feeChart" />
             </div>
-          </div>
-        </div>
-        <div className="panel">
-          <div className="panel-hd">
-            <div>
-              <div className="panel-title">지급수수료 주요 계정 추이</div>
-              <div className="panel-sub">예산 1월~12월 · 실적 1월~당월 · 백만원</div>
-            </div>
-            <div className="legend" id="feeTrendLegend" />
-          </div>
-          <div className="chart-wrap-lg">
-            <canvas id="feeTrendChart" />
-          </div>
-        </div>
-
-        <div className="section-lead">
-          대계정별 상세<span className="sub">본사 · 법인 각각 전체 대계정 기준 실적/예산</span>
-        </div>
-        <div className="chart-2col">
-          <div className="tbl-box" style={{ marginBottom: 0 }}>
-            <div className="tbl-hd">
-              본사 대계정별 상세 <span className="sub" id="hqMainAccountTblSub" />
-            </div>
-            <div id="hqMainAccountTable" />
-          </div>
-          <div className="tbl-box" style={{ marginBottom: 0 }}>
-            <div className="tbl-hd">
-              법인 대계정별 상세 <span className="sub" id="corpMainAccountTblSub" />
-            </div>
-            <div id="corpMainAccountTable" />
           </div>
         </div>
       </div>
@@ -288,7 +276,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           </div>
         </div>
 
-        <div className="section-lead">EVCS 구분별(계정 그룹) 상세</div>
+        <div className="section-lead">구분별 상세<span className="sub">국내+해외 합계 · 구성요소인 국내/해외 병기</span></div>
         <div className="tbl-box">
           <div id="evcsCatTable" />
         </div>
