@@ -94,13 +94,15 @@ export function initDashboard(data: DashboardData): () => void {
    * (계정별 탭은 SummaryBlock을, EVCS 탭은 evcsSummary(EVCS 배부금 기준 SummaryBlock)를 그대로 재사용한다.)
    */
   function drillDownSummary(scopeLabel: string, s: SummaryBlock): string {
+    const totalDiff = s.total.actual - s.total.budget;
     const rate = rateOf(s.total.actual, s.total.budget);
+    const totalDiffText = ` (${totalDiff >= 0 ? "+" : ""}${fmtM(totalDiff)}백만원 ${totalDiff >= 0 ? "초과" : "미달"})`;
     const overallText =
       rate === null
         ? "집행 실적이 아직 없습니다"
         : rate === Infinity
         ? "예산 없이 집행이 발생했습니다"
-        : `전체 집행률은 ${Math.round(rate)}%로 ${rate > 105 ? "예산을 다소 초과" : rate < 95 ? "예산 대비 여유 있게" : "예산 범위 내에서 양호하게"} 집행되었습니다`;
+        : `전체 집행률은 ${Math.round(rate)}%${totalDiffText}로 ${rate > 105 ? "예산을 다소 초과" : rate < 95 ? "예산 대비 여유 있게" : "예산 범위 내에서 양호하게"} 집행되었습니다`;
 
     const sides = (["본사", "법인"] as const)
       .map((hq) => {
@@ -128,13 +130,14 @@ export function initDashboard(data: DashboardData): () => void {
       }
 
       const parts = deptRows.map((d) => {
+        const deptLabel = d.dept.replace(/^\d+\.\s*/, "");
         const topAccs = d.byMainAccount
           .map((a) => ({ label: stripAccountNumber(a.account), diff: a.actual - a.budget }))
           .filter((a) => Math.sign(a.diff) === Math.sign(d.diff))
           .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
           .slice(0, 2)
           .map((a) => a.label);
-        return topAccs.length ? `${d.dept}의 ${topAccs.join(", ")}` : d.dept;
+        return topAccs.length ? `${deptLabel}의 ${topAccs.join(", ")}` : deptLabel;
       });
 
       return over
