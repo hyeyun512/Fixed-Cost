@@ -181,7 +181,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     const map = new Map<string, SummaryRow>();
     const byAccount = new Map<string, Map<string, number>>();
     for (const r of rows) {
-      const hq = r.hq_corp || "기타";
+      const hq = effectiveAllocHq(r);
       const dept = r.report_use_re || "미분류";
       const key = hq + "|" + dept;
       const cur = map.get(key) || { hq_corp: hq, dept, actual: 0, budget: 0, byMainAccount: [] };
@@ -202,7 +202,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     amountOf: (r: Row) => number
   ) {
     for (const r of rows) {
-      const hq = r.hq_corp || "기타";
+      const hq = effectiveAllocHq(r);
       const dept = r.report_use_re || "미분류";
       const key = hq + "|" + dept;
       const cur = map.get(key) || { hq_corp: hq, dept, actual: 0, budget: 0, byMainAccount: [] };
@@ -260,9 +260,9 @@ export async function loadDashboardData(): Promise<DashboardData> {
     const act = new Map<string, number>();
     const bud = new Map<string, number>();
     for (const r of actRows)
-      if (r.category && (!hq || (r.hq_corp || "기타") === hq)) act.set(r.category, (act.get(r.category) || 0) + n(r.amount_krw));
+      if (r.category && (!hq || effectiveAllocHq(r) === hq)) act.set(r.category, (act.get(r.category) || 0) + n(r.amount_krw));
     for (const r of budRows)
-      if (r.category && (!hq || (r.hq_corp || "기타") === hq)) bud.set(r.category, (bud.get(r.category) || 0) + n(r.amount_krw));
+      if (r.category && (!hq || effectiveAllocHq(r) === hq)) bud.set(r.category, (bud.get(r.category) || 0) + n(r.amount_krw));
     return catOrder.map((c) => ({ category: c, actual: act.get(c) || 0, budget: bud.get(c) || 0 }));
   }
   function categoryByHqForRows(actRows: Row[], budRows: Row[]): CategoryByHq {
@@ -313,7 +313,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     const actByDept = new Map<string, Map<string, number>>();
     const budByDept = new Map<string, Map<string, number>>();
     for (const r of actRows) {
-      if (!r.main_account_re || (r.hq_corp || "기타") !== hq) continue;
+      if (!r.main_account_re || effectiveAllocHq(r) !== hq) continue;
       act.set(r.main_account_re, (act.get(r.main_account_re) || 0) + amountOf(r));
       const dept = r.report_use_re || "미분류";
       const dm = actByDept.get(r.main_account_re) || new Map<string, number>();
@@ -321,7 +321,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
       actByDept.set(r.main_account_re, dm);
     }
     for (const r of budRows) {
-      if (!r.main_account_re || (r.hq_corp || "기타") !== hq) continue;
+      if (!r.main_account_re || effectiveAllocHq(r) !== hq) continue;
       bud.set(r.main_account_re, (bud.get(r.main_account_re) || 0) + amountOf(r));
       const dept = r.report_use_re || "미분류";
       const dm = budByDept.get(r.main_account_re) || new Map<string, number>();
@@ -414,7 +414,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
       const sum = new Map<string, number>();
       for (const r of rows) {
         if (!r.category) continue;
-        if (hq && (r.hq_corp || "기타") !== hq) continue;
+        if (hq && effectiveAllocHq(r) !== hq) continue;
         sum.set(r.category, (sum.get(r.category) || 0) + n(r.evcs_domestic_krw) + n(r.evcs_overseas_krw));
       }
       return sum;
