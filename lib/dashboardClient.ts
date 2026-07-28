@@ -859,26 +859,19 @@ export function initDashboard(data: DashboardData): () => void {
   }
   // Shared 그룹의 7개 세부 열(H.Mobility~H.Networks)은 기본적으로 화면 밖으로 밀어두고,
   // 자세히 보고 싶을 때만 표를 오른쪽으로 스크롤해서 보게 한다 (가독성을 위해 기본은 숨김에 가깝게).
-  function allocTable(allRows: AllocationRow[], opts: { showRate?: boolean; budgetRows?: AllocationRow[] }): string {
+  function allocTable(allRows: AllocationRow[]): string {
     const rows = allRows.filter((r) => r.level === 0 || !isAllocRowEmpty(r));
-    const budgetByLabel = new Map((opts.budgetRows || []).map((b) => [b.label, b]));
-    const rateHeader = opts.showRate ? "<th rowspan=\"2\">집행률</th>" : "";
     let html =
       `<table class="pl-tbl alloc-tbl"><thead>` +
-      `<tr><th rowspan="2">Company</th><th rowspan="2" class="alloc-tot-col">(A+B+C)<br>합계</th>${rateHeader}` +
+      `<tr><th rowspan="2">Company</th><th rowspan="2" class="alloc-tot-col">(A+B+C)<br>합계</th>` +
       `<th colspan="6" class="grp-a">(A) Humax</th><th rowspan="2">(B)<br>건물</th><th colspan="8" class="grp-c">(C) Shared</th></tr>` +
       `<tr><th>합계</th><th>STB</th><th>Mobility</th><th>EVCS(국내)</th><th>EVCS(해외)</th><th>Humax(공통)</th>` +
       `<th>합계</th><th>H.Mobility</th><th>H.EV</th><th>하이파킹</th><th>피플카</th><th>위너콤</th><th>홀딩스</th><th>H.Networks</th></tr>` +
       `</thead><tbody>`;
     rows.forEach((r) => {
       const rowClass = r.level === 0 ? "tot" : r.level === 1 ? "alloc-l1" : "alloc-l2";
-      let rateCell = "";
-      if (opts.showRate) {
-        const b = budgetByLabel.get(r.label);
-        rateCell = `<td class="badge-cell">${rateBadgeCell(b ? rateOf(r.grandTotal, b.grandTotal) : null)}</td>`;
-      }
       html +=
-        `<tr class="${rowClass}"><td class="alloc-sticky">${r.label}</td><td class="alloc-tot-col">${fmtM(r.grandTotal)}</td>${rateCell}` +
+        `<tr class="${rowClass}"><td class="alloc-sticky">${r.label}</td><td class="alloc-tot-col">${fmtM(r.grandTotal)}</td>` +
         `<td>${fmtM(r.humaxTotal)}</td><td>${fmtM(r.stb)}</td><td>${fmtM(r.mobility)}</td><td>${fmtM(r.evcsDomestic)}</td><td>${fmtM(r.evcsOverseas)}</td><td>${fmtM(r.humaxCommon)}</td>` +
         `<td>${fmtM(r.building)}</td><td class="alloc-shared-col">${fmtM(r.sharedTotal)}</td>` +
         `<td>${fmtM(r.hMobility)}</td><td>${fmtM(r.hEv)}</td><td>${fmtM(r.hiparking)}</td><td>${fmtM(r.peoplecar)}</td><td>${fmtM(r.winercom)}</td><td>${fmtM(r.holdings)}</td><td>${fmtM(r.hNetworks)}</td></tr>`;
@@ -890,9 +883,9 @@ export function initDashboard(data: DashboardData): () => void {
     const scope = getScope();
     const board = scope.allocationBoard;
     setText("allocBudgetSub", scopeLabel() + " · 백만원");
-    setHtml("allocBudgetTable", allocTable(board.budget, {}));
+    setHtml("allocBudgetTable", allocTable(board.budget));
     setText("allocActualSub", scopeLabel() + " · 백만원");
-    setHtml("allocActualTable", allocTable(board.actual, { showRate: true, budgetRows: board.budget }));
+    setHtml("allocActualTable", allocTable(board.actual));
     setText("allocDiffSub", scopeLabel() + " · 백만원 · 값에 마우스를 올리면 원인 대계정이 표시됩니다");
     setHtml("allocDiffTable", allocDiffTable(board.actual, board.budget));
     setHtml(
@@ -962,7 +955,7 @@ export function initDashboard(data: DashboardData): () => void {
 
     let html =
       `<table class="pl-tbl alloc-tbl"><thead>` +
-      `<tr><th rowspan="2">Company</th><th rowspan="2" class="alloc-tot-col">(A+B+C)<br>차이</th>` +
+      `<tr><th rowspan="2">Company</th><th rowspan="2" class="alloc-tot-col">(A+B+C)<br>차이</th><th rowspan="2">집행률</th>` +
       `<th colspan="6" class="grp-a">(A) Humax</th><th rowspan="2">(B)<br>건물</th><th colspan="8" class="grp-c">(C) Shared</th></tr>` +
       `<tr><th>합계</th><th>STB</th><th>Mobility</th><th>EVCS(국내)</th><th>EVCS(해외)</th><th>Humax(공통)</th>` +
       `<th>합계</th><th>H.Mobility</th><th>H.EV</th><th>하이파킹</th><th>피플카</th><th>위너콤</th><th>홀딩스</th><th>H.Networks</th></tr>` +
@@ -977,9 +970,10 @@ export function initDashboard(data: DashboardData): () => void {
         return `<td class="${cls}"${tip ? ` title="${escAttr(tip)}"` : ""}>${v >= 0 ? "+" : ""}${fmtM(v)}</td>`;
       };
       const rowClass = a.level === 0 ? "tot" : a.level === 1 ? "alloc-l1" : "alloc-l2";
+      const rateCell = `<td class="badge-cell">${rateBadgeCell(rateOf(a.grandTotal, b.grandTotal))}</td>`;
       html +=
         `<tr class="${rowClass}"><td class="alloc-sticky">${a.label}</td>` +
-        `${cell(d.grandTotal, ALLOC_FIELDS, "alloc-tot-col")}` +
+        `${cell(d.grandTotal, ALLOC_FIELDS, "alloc-tot-col")}${rateCell}` +
         `${cell(d.humaxTotal, ["stb", "mobility", "evcsDomestic", "evcsOverseas", "humaxCommon"])}` +
         `${cell(d.stb, ["stb"])}${cell(d.mobility, ["mobility"])}${cell(d.evcsDomestic, ["evcsDomestic"])}${cell(d.evcsOverseas, ["evcsOverseas"])}${cell(d.humaxCommon, ["humaxCommon"])}` +
         `${cell(d.building, ["building"])}` +
@@ -1035,18 +1029,21 @@ export function initDashboard(data: DashboardData): () => void {
       if (!top) continue;
 
       const over = dimTotal > 0;
-      // 이 Company의 배부전 총합계도 같은 방향으로 유의미하게 움직였으면 "총합계 변동", 아니면 "배부 변동"(다른 항목에서 이동).
-      const totalMovedSameWay = Math.sign(top.diff.grandTotal) === sign && Math.abs(top.diff.grandTotal) >= REMARK_MIN_DIFF_WON;
-      const causeType = totalMovedSameWay ? "총합계 자체의 변동" : "다른 항목에서의 배부 변동";
-      sentences.push(
+      let sentence =
         `<b>${dim.label}</b>${josaEunNeun(dim.label)} 예산 대비 ${over ? "+" : ""}${fmtM(dimTotal)}백만원 ${
           over ? "초과" : "미달"
-        }이며, 주요 원인은 <b>${top.label}</b>(${top.diff[dim.key] >= 0 ? "+" : ""}${fmtM(top.diff[dim.key])}백만원)${josaEunNeun(
-          top.label
-        )}로, ${top.label}의 배부전 총합계는 ${
-          totalMovedSameWay ? `${top.diff.grandTotal >= 0 ? "+" : ""}${fmtM(top.diff.grandTotal)}백만원 함께 움직여` : "예산과 큰 차이가 없어"
-        } <b>${causeType}</b>${josaRoEuro(causeType)} 파악됩니다.`
-      );
+        }이며, 주요 원인은 <b>${top.label}</b>(${top.diff[dim.key] >= 0 ? "+" : ""}${fmtM(top.diff[dim.key])}백만원)${josaEunNeun(top.label)}로 파악됩니다.`;
+
+      // 특이사항: 이 Company의 배부전 총합계는 반대 방향으로 움직였는데(=총합계는 반대로 갔는데) 이 항목의 배부액만 그렇게 늘거나 줄어든 경우만 별도로 짚어준다.
+      const totalMovedOpposite = Math.sign(top.diff.grandTotal) === -sign && Math.abs(top.diff.grandTotal) >= REMARK_MIN_DIFF_WON;
+      if (totalMovedOpposite) {
+        sentence += ` 다만 ${top.label}의 배부전 총합계는 오히려 ${top.diff.grandTotal >= 0 ? "+" : ""}${fmtM(
+          top.diff.grandTotal
+        )}백만원 ${top.diff.grandTotal >= 0 ? "증가" : "감소"}해, <b>배부 비중 자체의 변동</b>${josaRoEuro(
+          "배부 비중 자체의 변동"
+        )} 파악되는 특이 케이스입니다.`;
+      }
+      sentences.push(sentence);
     }
 
     if (!sentences.length) {
