@@ -1001,11 +1001,13 @@ export function initDashboard(data: DashboardData): () => void {
   /**
    * Diff 표를 실제로 훑어서 배부 항목 간 이동(예: EVCS해외→EVCS국내)이나
    * 특정 사업부 편중 초과/미달 패턴을 찾아 문장으로 만든다. 추정 없이 실제 diff 값만 사용한다.
+   * level 1(부문/법인사)만 합산한다 — level 2(Staff부문 하위조직)는 그 상위 level 1 "5. Staff부문"에
+   * 이미 포함된 값이라, 둘 다 더하면 Staff부문 몫이 이중으로 잡혀 Total 행과 어긋난다.
    */
   function allocTrendSummary(actualRows: AllocationRow[], budgetRows: AllocationRow[]): string {
     const budgetByLabel = new Map(budgetRows.map((b) => [b.label, b]));
     const rows = actualRows
-      .filter((a) => a.level === 1 || a.level === 2)
+      .filter((a) => a.level === 1)
       .map((a) => {
         const b = budgetByLabel.get(a.label);
         if (!b) return null;

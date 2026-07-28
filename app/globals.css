@@ -78,6 +78,9 @@ body{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif;b
 .pl-tbl.alloc-tbl .alloc-sticky{position:sticky;left:0;background:#fff;z-index:1;box-shadow:1px 0 0 #e2e8f0;white-space:nowrap;min-width:110px}
 .pl-tbl.alloc-tbl .tot .alloc-sticky{background:#f8fafc}
 .pl-tbl.alloc-tbl .alloc-diff-hint{cursor:help;text-decoration:underline dotted;text-underline-offset:3px}
+.pl-tbl.alloc-tbl th,.pl-tbl.alloc-tbl td{border-right:1px solid #e2e8f0}
+.pl-tbl.alloc-tbl th:last-child,.pl-tbl.alloc-tbl td:last-child{border-right:none}
+.pl-tbl.alloc-tbl .alloc-sticky{border-right:1px solid #cbd5e1}
 .alloc-scroll{overflow-x:auto;max-width:100%}
 .pl-tbl.parallel-tbl th.grp-total{background:#eff6ff;color:#1d4ed8}
 .pl-tbl.parallel-tbl th.grp-hq{background:#e0e7ff;color:#3730a3;border-left:1px solid #c7d2fe}

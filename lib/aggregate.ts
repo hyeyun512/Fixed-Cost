@@ -141,6 +141,11 @@ export async function loadDashboardData(): Promise<DashboardData> {
       if (co) corpCompanySet.add(co);
     }
   }
+  // 일부 전표가 hq_corp='본사'로 잘못 태깅된 채 report_use_re만 법인 소속사 코드(HUK 등)로 남아있는 경우가
+  // 있어, hqDeptSet에 법인 코드가 섞여 들어갈 수 있다. 그대로 두면 배부판에서 같은 라벨(예: "HDG")이
+  // 본사 밑의 빈 유령 행과 법인 밑의 실제 행, 두 번 나타나면서 라벨 기준 조회(예산 매칭 등)가 엉뚱한
+  // 값을 집어오는 문제가 생기므로, 법인 코드로 확인된 값은 본사 부문 목록에서 제거한다.
+  for (const code of corpCompanySet) hqDeptSet.delete(code);
   const hqDeptOrder = orderedUnique(hqDeptSet, PREFERRED_HQ_DEPT_ORDER);
   const staffSubOrder = orderedUnique(staffSubSet, PREFERRED_STAFF_SUBORG_ORDER);
   const corpCompanyOrder = orderedUnique(corpCompanySet, PREFERRED_CORP_COMPANY_ORDER);
