@@ -147,24 +147,24 @@ export default function Dashboard({ data }: { data: DashboardData }) {
       {/* ===================== CATEGORY TAB ===================== */}
       <div id="tab-category" className="content">
         <div id="catInsight" />
-        <div className="chart-2col">
-          <div className="tbl-box" style={{ marginBottom: 0 }}>
-            <div className="tbl-hd">
-              구분별 상세 <span className="sub" id="catTblSub" />
-            </div>
+        <div className="tbl-box">
+          <div className="tbl-hd">
+            구분별 상세 <span className="sub" id="catTblSub" />
+          </div>
+          <div className="tbl-scroll">
             <div id="categoryTable" />
           </div>
-          <div className="panel" style={{ marginBottom: 0 }}>
-            <div className="panel-hd">
-              <div>
-                <div className="panel-title">구분별 예산 vs 실적</div>
-                <div className="panel-sub">백만원</div>
-              </div>
-              <div className="legend" id="catLegend" />
+        </div>
+        <div className="panel">
+          <div className="panel-hd">
+            <div>
+              <div className="panel-title">구분별 예산 vs 실적</div>
+              <div className="panel-sub">백만원 · 전사 기준</div>
             </div>
-            <div className="chart-wrap-lg">
-              <canvas id="categoryChart" />
-            </div>
+            <div className="legend" id="catLegend" />
+          </div>
+          <div className="chart-wrap-lg">
+            <canvas id="categoryChart" />
           </div>
         </div>
 

@@ -564,21 +564,36 @@ export function initDashboard(data: DashboardData): () => void {
     const fees = scope.fee;
     setText("catTblSub", scopeLabel() + " · 백만원");
 
-    // 구분별 상세: 구분마다 총합계(볼드) 아래에 구성요소인 본사/법인을 나란히 보여준다.
-    const catRows = cats
+    // 구분별 상세: 구분마다 총합계/본사/법인을 각각 예산·실적·차이·집행률 4열씩 나란히(병렬) 배치해
+    // 본사와 법인을 한 행에서 바로 비교할 수 있게 한다.
+    const quadCells = (actual: number, budget: number): string => {
+      const diff = actual - budget;
+      return (
+        `<td${cls(budget)}>${fmtM(budget)}</td><td${cls(actual)}>${fmtM(actual)}</td>` +
+        `<td${diffCls(diff)}>${diff >= 0 ? "+" : ""}${fmtM(diff)}</td>` +
+        `<td class="badge-cell">${rateBadgeCell(rateOf(actual, budget))}</td>`
+      );
+    };
+    const catBody = cats
       .map((c) => {
         const hq본사 = catHq.본사.find((x) => x.category === c.category) || { actual: 0, budget: 0 };
         const hq법인 = catHq.법인.find((x) => x.category === c.category) || { actual: 0, budget: 0 };
-        return (
-          row(c.category, c.actual, c.budget, "tot") +
-          row(c.category, hq본사.actual, hq본사.budget, "", "본사") +
-          row(c.category, hq법인.actual, hq법인.budget, "", "법인")
-        );
+        return `<tr><td>${c.category}</td>${quadCells(c.actual, c.budget)}${quadCells(hq본사.actual, hq본사.budget)}${quadCells(hq법인.actual, hq법인.budget)}</tr>`;
       })
       .join("");
+    const totA = cats.reduce((s, c) => s + c.actual, 0),
+      totB = cats.reduce((s, c) => s + c.budget, 0);
+    const hq본사TotA = catHq.본사.reduce((s, c) => s + c.actual, 0),
+      hq본사TotB = catHq.본사.reduce((s, c) => s + c.budget, 0);
+    const hq법인TotA = catHq.법인.reduce((s, c) => s + c.actual, 0),
+      hq법인TotB = catHq.법인.reduce((s, c) => s + c.budget, 0);
+    const catTotRow = `<tr class="tot"><td>전체 합계</td>${quadCells(totA, totB)}${quadCells(hq본사TotA, hq본사TotB)}${quadCells(hq법인TotA, hq법인TotB)}</tr>`;
     setHtml(
       "categoryTable",
-      table5(catRows + row("전체 합계", cats.reduce((s, c) => s + c.actual, 0), cats.reduce((s, c) => s + c.budget, 0), "tot"))
+      `<table class="pl-tbl parallel-tbl"><thead>
+        <tr><th rowspan="2">구분</th><th colspan="4" class="grp-total">총합계</th><th colspan="4" class="grp-hq">본사</th><th colspan="4" class="grp-corp">법인</th></tr>
+        <tr><th>예산</th><th>실적</th><th>차이</th><th>집행률</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th><th>예산</th><th>실적</th><th>차이</th><th>집행률</th></tr>
+      </thead><tbody>${catBody}${catTotRow}</tbody></table>`
     );
     setHtml("catLegend", legendHtml([[C_BUDGET, "예산"], [C_ACTUAL, "실적"]]));
     queueChart("category", "categoryChart", () =>

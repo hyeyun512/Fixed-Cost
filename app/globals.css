@@ -72,6 +72,13 @@ body{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif;b
 .pl-tbl.alloc-tbl .alloc-tot-col{background:#eff6ff}
 .pl-tbl.alloc-tbl .alloc-l1 td:first-child{padding-left:26px;color:#475569}
 .pl-tbl.alloc-tbl .alloc-l2 td:first-child{padding-left:42px;color:#64748b;font-size:12px}
+.pl-tbl.parallel-tbl th.grp-total{background:#eff6ff;color:#1d4ed8}
+.pl-tbl.parallel-tbl th.grp-hq{background:#e0e7ff;color:#3730a3;border-left:1px solid #c7d2fe}
+.pl-tbl.parallel-tbl th.grp-corp{background:#fce7f3;color:#9d174d;border-left:1px solid #fbcfe8}
+.pl-tbl.parallel-tbl thead tr:nth-child(2) th:nth-child(5),
+.pl-tbl.parallel-tbl tbody td:nth-child(6){border-left:1px solid #e2e8f0}
+.pl-tbl.parallel-tbl thead tr:nth-child(2) th:nth-child(9),
+.pl-tbl.parallel-tbl tbody td:nth-child(10){border-left:1px solid #e2e8f0}
 .neg{color:#dc2626!important}
 .pos{color:#2563eb!important}
 .hq-chip{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:5px;margin-right:6px;letter-spacing:.2px}
