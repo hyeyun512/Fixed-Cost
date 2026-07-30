@@ -21,6 +21,7 @@ body{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif;b
 
 .content{display:none;padding:22px 28px 50px;max-width:1400px;margin:0 auto}
 .content.active{display:block}
+.sheet-title{font-size:19px;font-weight:800;color:#1a202c;margin:0 0 18px;padding-bottom:12px;border-bottom:0.5px solid #e2e8f0}
 .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:16px}
 .chart-2col{display:grid;grid-template-columns:1.15fr 0.85fr;gap:16px;margin-bottom:16px}
 .chart-2col.rev{grid-template-columns:0.85fr 1.15fr}

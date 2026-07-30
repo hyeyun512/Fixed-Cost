@@ -53,19 +53,25 @@ export default function Dashboard({ data }: { data: DashboardData }) {
       </div>
 
       <div className="tab-bar">
-        <div className="tab active" data-tab="summary">
-          ① Humax(전사)
+        <div className="tab" data-tab="blank">
+          ① Summary
         </div>
-        <div className="tab" data-tab="category">
-          ② 계정별
+        <div className="tab active" data-tab="summary">
+          ② Humax(전사)
         </div>
         <div className="tab" data-tab="evcs">
-          ③ EVCS
+          ③ EVCS(사업부)
+        </div>
+        <div className="tab" data-tab="category">
+          ④ Appendix A
         </div>
         <div className="tab" data-tab="alloc">
-          ④ 배부판
+          ⑤ Appendix B
         </div>
       </div>
+
+      {/* ===================== SUMMARY(BLANK) TAB ===================== */}
+      <div id="tab-blank" className="content" />
 
       {/* ===================== SUMMARY TAB ===================== */}
       <div id="tab-summary" className="content active">
@@ -141,61 +147,6 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         </div>
         <div className="tbl-box">
           <div id="deptTable" />
-        </div>
-      </div>
-
-      {/* ===================== CATEGORY TAB ===================== */}
-      <div id="tab-category" className="content">
-        <div id="catInsight" />
-        <div className="tbl-box">
-          <div className="tbl-hd">
-            구분별 상세 <span className="sub" id="catTblSub" />
-          </div>
-          <div className="tbl-scroll">
-            <div id="categoryTable" />
-          </div>
-        </div>
-        <div className="panel">
-          <div className="panel-hd">
-            <div>
-              <div className="panel-title">구분별 예산 vs 실적</div>
-              <div className="panel-sub">백만원 · 전사 기준</div>
-            </div>
-            <div className="legend" id="catLegend" />
-          </div>
-          <div className="chart-wrap-lg">
-            <canvas id="categoryChart" />
-          </div>
-        </div>
-
-        <div className="section-lead">
-          대계정별 상세<span className="sub">본사 · 법인 각각 전체 대계정 기준 실적/예산 · 구분 순으로 묶어서 표시</span>
-        </div>
-        <div className="chart-2col">
-          <div className="tbl-box" style={{ marginBottom: 0 }}>
-            <div className="tbl-hd">
-              본사 대계정별 상세 <span className="sub" id="hqMainAccountTblSub" />
-            </div>
-            <div id="hqMainAccountTable" />
-          </div>
-          <div className="tbl-box" style={{ marginBottom: 0 }}>
-            <div className="tbl-hd">
-              법인 대계정별 상세 <span className="sub" id="corpMainAccountTblSub" />
-            </div>
-            <div id="corpMainAccountTable" />
-          </div>
-        </div>
-
-        <div className="section-lead">
-          지급수수료 상세 관리<span className="sub">주요 계정 기준 · 어디서 더 쓰고 덜 쓰는지 확인</span>
-        </div>
-        <div id="feeOrgInsight" />
-        <div className="tbl-box">
-          <div className="tbl-hd">
-            조직별 지급수수료 현황{" "}
-            <span className="sub">대상 계정: 지급수수료, 외주개발용역비, 인증대행료, 특허처리비 · 본사 부문별(Staff부문은 대조직까지 세분화) · 법인</span>
-          </div>
-          <div id="feeTable" />
         </div>
       </div>
 
@@ -307,8 +258,65 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         </div>
       </div>
 
+      {/* ===================== CATEGORY TAB ===================== */}
+      <div id="tab-category" className="content">
+        <div className="sheet-title">Humax 계정별</div>
+        <div id="catInsight" />
+        <div className="tbl-box">
+          <div className="tbl-hd">
+            구분별 상세 <span className="sub" id="catTblSub" />
+          </div>
+          <div className="tbl-scroll">
+            <div id="categoryTable" />
+          </div>
+        </div>
+        <div className="panel">
+          <div className="panel-hd">
+            <div>
+              <div className="panel-title">구분별 예산 vs 실적</div>
+              <div className="panel-sub">백만원 · 전사 기준</div>
+            </div>
+            <div className="legend" id="catLegend" />
+          </div>
+          <div className="chart-wrap-lg">
+            <canvas id="categoryChart" />
+          </div>
+        </div>
+
+        <div className="section-lead">
+          대계정별 상세<span className="sub">본사 · 법인 각각 전체 대계정 기준 실적/예산 · 구분 순으로 묶어서 표시</span>
+        </div>
+        <div className="chart-2col">
+          <div className="tbl-box" style={{ marginBottom: 0 }}>
+            <div className="tbl-hd">
+              본사 대계정별 상세 <span className="sub" id="hqMainAccountTblSub" />
+            </div>
+            <div id="hqMainAccountTable" />
+          </div>
+          <div className="tbl-box" style={{ marginBottom: 0 }}>
+            <div className="tbl-hd">
+              법인 대계정별 상세 <span className="sub" id="corpMainAccountTblSub" />
+            </div>
+            <div id="corpMainAccountTable" />
+          </div>
+        </div>
+
+        <div className="section-lead">
+          지급수수료 상세 관리<span className="sub">주요 계정 기준 · 어디서 더 쓰고 덜 쓰는지 확인</span>
+        </div>
+        <div id="feeOrgInsight" />
+        <div className="tbl-box">
+          <div className="tbl-hd">
+            조직별 지급수수료 현황{" "}
+            <span className="sub">대상 계정: 지급수수료, 외주개발용역비, 인증대행료, 특허처리비 · 본사 부문별(Staff부문은 대조직까지 세분화) · 법인</span>
+          </div>
+          <div id="feeTable" />
+        </div>
+      </div>
+
       {/* ===================== ALLOCATION BOARD TAB ===================== */}
       <div id="tab-alloc" className="content">
+        <div className="sheet-title">Humax 배부판</div>
         <div id="allocTrendInsight" />
 
         <div className="section-lead">
