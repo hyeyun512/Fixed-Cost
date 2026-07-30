@@ -54,7 +54,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
 
       <div className="tab-bar">
         <div className="tab active" data-tab="summary">
-          ① Summary
+          ① Humax(전사)
         </div>
         <div className="tab" data-tab="category">
           ② 계정별
