@@ -45,6 +45,12 @@ body{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif;b
 .bd-blue{background:#eff6ff;color:#2563eb;border:0.5px solid #bfdbfe}
 .bd-gray{background:#f1f5f9;color:#64748b;border:0.5px solid #e2e8f0}
 
+#summaryKpis{display:block}
+.kcard-combo{display:flex;align-items:stretch}
+.kcombo-item{flex:1;padding:0 24px;display:flex;flex-direction:column;justify-content:center;min-width:0}
+.kcombo-item:first-child{padding-left:0}
+.kcombo-div{width:0.5px;background:#e2e8f0;margin:2px 0}
+
 .panel{background:#fff;border:0.5px solid #e2e8f0;border-radius:12px;padding:20px}
 .panel-hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;gap:10px;flex-wrap:wrap}
 .panel-title{font-size:14px;font-weight:700;color:#1a202c}

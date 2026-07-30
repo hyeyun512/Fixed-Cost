@@ -589,7 +589,6 @@ export function initDashboard(data: DashboardData): () => void {
 
     const a = s.total.actual,
       b = s.total.budget,
-      diff = a - b,
       rate = rateOf(a, b);
 
     // 전월 대비 당월 실적 증감 (당월 보기일 때만, 비교 가능한 전월이 있을 때만 표시)
@@ -601,19 +600,22 @@ export function initDashboard(data: DashboardData): () => void {
 
     setHtml(
       "summaryKpis",
-      `<div class="kcard"><div class="kcard-bar" style="background:#2563eb"></div>
+      `<div class="kcard kcard-combo"><div class="kcard-bar" style="background:#2563eb"></div>
+        <div class="kcombo-item">
           <div class="klabel">집행 실적</div><div class="kval">${fmtM(a)}<span class="kunit"> 백만원</span></div>
-          <div class="ksub">${scopeLabel()}${summaryMomHtml}</div></div>` +
-        `<div class="kcard"><div class="kcard-bar" style="background:#94a3b8"></div>
+          <div class="ksub">${scopeLabel()}${summaryMomHtml}</div>
+        </div>
+        <div class="kcombo-div"></div>
+        <div class="kcombo-item">
           <div class="klabel">예산</div><div class="kval">${fmtM(b)}<span class="kunit"> 백만원</span></div>
-          <div class="ksub">${scopeLabel()}</div></div>` +
-        `<div class="kcard"><div class="kcard-bar" style="background:${diff > 0 ? "#dc2626" : "#2563eb"}"></div>
-          <div class="klabel">차이 금액 (실적-예산)</div>
-          <div class="kval" style="color:${diff > 0 ? "#dc2626" : "#2563eb"}">${diff >= 0 ? "+" : ""}${fmtM(diff)}<span class="kunit"> 백만원</span></div>
-          <div class="ksub">&nbsp;</div></div>` +
-        `<div class="kcard"><div class="kcard-bar" style="background:#7c3aed"></div>
+          <div class="ksub">${scopeLabel()}</div>
+        </div>
+        <div class="kcombo-div"></div>
+        <div class="kcombo-item">
           <div class="klabel">집행률</div><div class="kval">${rate === null ? "-" : rate === Infinity ? "∞" : Math.round(rate) + "%"}</div>
-          <span class="kbadge ${badgeClass(rate)}">${badgeLabel(rate)}</span></div>`
+          <span class="kbadge ${badgeClass(rate)}">${badgeLabel(rate)}</span>
+        </div>
+      </div>`
     );
 
     // 경영진 요약 코멘트: 총합계 → 본사/법인 → 구분(re) → 대계정 순으로 원인을 추적한다.
