@@ -62,11 +62,12 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         <div className="tab" data-tab="evcs">
           ③ EVCS(사업부)
         </div>
-        <div className="tab" data-tab="category">
-          ④ Appendix A
+        <div className="tab-sep" />
+        <div className="tab tab-sub" data-tab="category">
+          Appendix A
         </div>
-        <div className="tab" data-tab="alloc">
-          ⑤ Appendix B
+        <div className="tab tab-sub" data-tab="alloc">
+          Appendix B
         </div>
       </div>
 
@@ -260,7 +261,13 @@ export default function Dashboard({ data }: { data: DashboardData }) {
 
       {/* ===================== CATEGORY TAB ===================== */}
       <div id="tab-category" className="content">
-        <div className="sheet-title">Humax 계정별</div>
+        <div className="sheet-hd">
+          <div className="sheet-hd-bar" />
+          <div>
+            <div className="sheet-eyebrow">Appendix A</div>
+            <div className="sheet-title">Humax 계정별</div>
+          </div>
+        </div>
         <div id="catInsight" />
         <div className="tbl-box">
           <div className="tbl-hd">
@@ -316,7 +323,13 @@ export default function Dashboard({ data }: { data: DashboardData }) {
 
       {/* ===================== ALLOCATION BOARD TAB ===================== */}
       <div id="tab-alloc" className="content">
-        <div className="sheet-title">Humax 배부판</div>
+        <div className="sheet-hd">
+          <div className="sheet-hd-bar" />
+          <div>
+            <div className="sheet-eyebrow">Appendix B</div>
+            <div className="sheet-title">Humax 배부판</div>
+          </div>
+        </div>
         <div id="allocTrendInsight" />
 
         <div className="section-lead">
