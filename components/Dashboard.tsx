@@ -199,6 +199,38 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           </div>
         </div>
 
+        <div className="panel" style={{ marginBottom: 16 }}>
+          <div className="panel-hd">
+            <div>
+              <div className="panel-title">국내/해외 비중 (월별 예산 vs 실적)</div>
+              <div className="panel-sub" id="evcsShareSub">
+                &nbsp;
+              </div>
+            </div>
+            <div className="legend">
+              <span className="leg">
+                <span className="leg-dot" style={{ background: "rgba(8,145,178,0.35)" }} />
+                예산-국내
+              </span>
+              <span className="leg">
+                <span className="leg-dot" style={{ background: "rgba(15,23,42,0.3)" }} />
+                예산-해외
+              </span>
+              <span className="leg">
+                <span className="leg-dot" style={{ background: "#0891b2" }} />
+                실적-국내
+              </span>
+              <span className="leg">
+                <span className="leg-dot" style={{ background: "#0f172a" }} />
+                실적-해외
+              </span>
+            </div>
+          </div>
+          <div className="chart-wrap-lg">
+            <canvas id="evcsShareChart" />
+          </div>
+        </div>
+
         <div className="tbl-box">
           <div className="tbl-hd">
             구분별 상세 <span className="sub">EVCS 배부 금액(국내+해외) 기준</span>
@@ -229,6 +261,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         <div className="section-lead">
           대계정 '인증대행료' 상세 관리<span className="sub">EVCS에 배부된 인증대행료 · 예산 대비 초과 집행 위험 모니터링</span>
         </div>
+        <div className="kpi-row" id="certKpis" />
         <div id="certAlert" />
         <div className="panel" style={{ marginBottom: 16 }}>
           <div className="panel-hd">

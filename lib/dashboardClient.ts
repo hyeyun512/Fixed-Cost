@@ -494,15 +494,56 @@ export function initDashboard(data: DashboardData): () => void {
     return new Chart(canvas, config);
   }
 
-  // ============ KPI card ============
-  function kcard(color: string, label: string, actual: number, budget: number, momHtml = ""): string {
-    const diff = actual - budget;
-    const rate = rateOf(actual, budget);
-    return `<div class="kcard"><div class="kcard-bar" style="background:${color}"></div>
-      <div class="klabel">${label}</div>
-      <div class="kval">${fmtM(actual)}<span class="kunit"> 백만원</span></div>
-      <div class="ksub">예산 ${fmtM(budget)} 백만원 · 차이 ${diff >= 0 ? "+" : ""}${fmtM(diff)}${momHtml}</div>
-      <span class="kbadge ${badgeClass(rate)}">집행률 ${badgeLabel(rate)}</span></div>`;
+  /** 국내/해외 비중을 월별로 보여주는 그룹-스택 막대 차트 (예산 막대 / 실적 막대를 나란히, 각각 국내+해외로 쌓음). */
+  function shareChart(
+    canvasId: string,
+    labels: string[],
+    budgetDom: number[],
+    budgetOvs: number[],
+    actualDom: number[],
+    actualOvs: number[]
+  ): AnyChart {
+    const canvas = el(canvasId) as HTMLCanvasElement;
+    const pct = (v: number, i: number, dom: number[], ovs: number[]) => {
+      const total = dom[i] + ovs[i];
+      return total ? Math.round((v / total) * 100) : 0;
+    };
+    const config: any = {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          { label: "예산-국내", data: budgetDom, backgroundColor: "rgba(8,145,178,0.35)", stack: "예산", borderRadius: 3 },
+          { label: "예산-해외", data: budgetOvs, backgroundColor: "rgba(15,23,42,0.3)", stack: "예산", borderRadius: 3 },
+          { label: "실적-국내", data: actualDom, backgroundColor: "#0891b2", stack: "실적", borderRadius: 3 },
+          { label: "실적-해외", data: actualOvs, backgroundColor: "#0f172a", stack: "실적", borderRadius: 3 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx: any) => {
+                const i = ctx.dataIndex;
+                const v = ctx.parsed.y as number;
+                const isActual = ctx.dataset.stack === "실적";
+                const dom = isActual ? actualDom : budgetDom;
+                const ovs = isActual ? actualOvs : budgetOvs;
+                return `${ctx.dataset.label}: ${fmtM(v)}백만원 (${pct(v, i, dom, ovs)}%)`;
+              },
+            },
+          },
+        },
+        scales: {
+          y: { stacked: true, ticks: { callback: (v: any) => fmtM(v as number) }, grid: { color: "#f1f5f9" } },
+          x: { stacked: true, grid: { display: false } },
+        },
+      },
+    };
+    return new Chart(canvas, config);
   }
 
   const CHIP_CLASS: Record<string, string> = { 본사: "hq", 법인: "corp", 국내: "dom", 해외: "ovs" };
@@ -778,26 +819,34 @@ export function initDashboard(data: DashboardData): () => void {
 
     // 전월 대비 증감 (당월 보기일 때만, 비교 가능한 전월이 있을 때만 표시) - Summary 탭과 동일한 방식
     const prevEvcsMonthIdx = months.indexOf(currentMonth) - 1;
-    let evcsMomTot = "",
-      evcsMomDom = "",
-      evcsMomOvs = "";
+    let evcsMomTot = "";
     if (currentMode === "month" && prevEvcsMonthIdx >= 0) {
       const prevM = data.byMonth[months[prevEvcsMonthIdx]];
-      const prevDom = prevM.evcs.total.domestic.actual;
-      const prevOvs = prevM.evcs.total.overseas.actual;
-      evcsMomTot = momBadgeHtml(totA, prevDom + prevOvs);
-      evcsMomDom = momBadgeHtml(domA, prevDom);
-      evcsMomOvs = momBadgeHtml(ovsA, prevOvs);
+      const prevTotal = prevM.evcs.total.domestic.actual + prevM.evcs.total.overseas.actual;
+      evcsMomTot = momBadgeHtml(totA, prevTotal);
     }
+    const evcsRate = rateOf(totA, totB);
 
+    // Humax(전사) 탭과 동일하게 실적/예산/집행률 통합 카드 하나로 표시한다.
+    // 국내/해외 개별 카드는 생략하고, 대신 비중은 아래 "국내/해외 비중" 추이 차트로 확인한다.
     setHtml(
       "evcsKpis",
-      kcard("#2563eb", "EVCS 전체 실적", totA, totB, evcsMomTot) +
-        kcard("#0891b2", "국내", domA, domB, evcsMomDom) +
-        kcard("#0f172a", "해외", ovsA, ovsB, evcsMomOvs) +
-        `<div class="kcard"><div class="kcard-bar" style="background:#7c3aed"></div>
-          <div class="klabel">해외 비중</div><div class="kval">${Math.round((ovsA / (totA || 1)) * 100)}<span class="kunit">%</span></div>
-          <div class="ksub">${scopeLabel()} 기준</div></div>`
+      `<div class="kcard kcard-combo"><div class="kcard-bar" style="background:#0891b2"></div>
+        <div class="kcombo-item">
+          <div class="klabel">집행 실적</div><div class="kval">${fmtM(totA)}<span class="kunit"> 백만원</span></div>
+          <div class="ksub">${scopeLabel()}${evcsMomTot}</div>
+        </div>
+        <div class="kcombo-div"></div>
+        <div class="kcombo-item">
+          <div class="klabel">예산</div><div class="kval">${fmtM(totB)}<span class="kunit"> 백만원</span></div>
+          <div class="ksub">${scopeLabel()}</div>
+        </div>
+        <div class="kcombo-div"></div>
+        <div class="kcombo-item">
+          <div class="klabel">집행률</div><div class="kval">${evcsRate === null ? "-" : evcsRate === Infinity ? "∞" : Math.round(evcsRate) + "%"}</div>
+          <span class="kbadge ${badgeClass(evcsRate)}">${badgeLabel(evcsRate)}</span>
+        </div>
+      </div>`
     );
 
     // 신규: EVCS 월별 실적 추이 콤보 차트 (국내+해외 합계, 항상 전체 월 범위)
@@ -821,6 +870,19 @@ export function initDashboard(data: DashboardData): () => void {
         donutEvcsCats.map((c) => c.category),
         donutEvcsCats.map((c) => c.dom_actual + c.ovs_actual),
         donutEvcsCats.map((c, i) => colorFor(c.category, i))
+      )
+    );
+
+    // 신규: 국내/해외 비중 월별 예산·실적 (해외에 얼마나 투자되고 있는지 한눈에 보기 위한 간략 시각화).
+    setText("evcsShareSub", `1월~${lastMonth} 예산 vs 실적, 국내/해외 구성비`);
+    queueChart("evcs", "evcsShareChart", () =>
+      shareChart(
+        "evcsShareChart",
+        months,
+        trend.evcs_domestic.map((x) => x.budget),
+        trend.evcs_overseas.map((x) => x.budget),
+        trend.evcs_domestic.map((x) => x.actual),
+        trend.evcs_overseas.map((x) => x.actual)
       )
     );
 
@@ -858,6 +920,28 @@ export function initDashboard(data: DashboardData): () => void {
       coRate = rateOf(co.actual, co.budget);
     const certTotA = cd.actual + co.actual,
       certTotB = cd.budget + co.budget;
+    const certRate = rateOf(certTotA, certTotB);
+
+    // 인증대행료 섹션 상단에 예산·실적 총액을 먼저 보여준 뒤, 아래 콤보 차트에서 월별 추이를 확인하게 한다.
+    setHtml(
+      "certKpis",
+      `<div class="kcard kcard-combo"><div class="kcard-bar" style="background:${C_ALT}"></div>
+        <div class="kcombo-item">
+          <div class="klabel">인증대행료 실적</div><div class="kval">${fmtM(certTotA)}<span class="kunit"> 백만원</span></div>
+          <div class="ksub">${scopeLabel()}</div>
+        </div>
+        <div class="kcombo-div"></div>
+        <div class="kcombo-item">
+          <div class="klabel">예산</div><div class="kval">${fmtM(certTotB)}<span class="kunit"> 백만원</span></div>
+          <div class="ksub">${scopeLabel()}</div>
+        </div>
+        <div class="kcombo-div"></div>
+        <div class="kcombo-item">
+          <div class="klabel">집행률</div><div class="kval">${certRate === null ? "-" : certRate === Infinity ? "∞" : Math.round(certRate) + "%"}</div>
+          <span class="kbadge ${badgeClass(certRate)}">${badgeLabel(certRate)}</span>
+        </div>
+      </div>`
+    );
 
     const riskyDom = cdRate !== null && (cdRate === Infinity || cdRate > 130);
     const riskyOvs = coRate !== null && (coRate === Infinity || coRate > 130);
@@ -873,7 +957,7 @@ export function initDashboard(data: DashboardData): () => void {
     } else {
       setHtml(
         "certAlert",
-        `<div class="callout info"><div class="ic">✅</div><div>${scopeLabel()} 기준 인증대행료는 예산 범위 내에서 관리되고 있습니다 (합계 집행률 ${badgeLabel(rateOf(certTotA, certTotB))}).</div></div>`
+        `<div class="callout info"><div class="ic">✅</div><div>${scopeLabel()} 기준 인증대행료는 예산 범위 내에서 관리되고 있습니다 (합계 집행률 ${badgeLabel(certRate)}).</div></div>`
       );
     }
 
