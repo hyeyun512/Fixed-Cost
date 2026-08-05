@@ -1243,27 +1243,10 @@ export function initDashboard(data: DashboardData): () => void {
 
   renderAll();
 
-  // 인쇄용 CSS(@media print)가 차트 영역 높이를 줄이는데, Chart.js 캔버스는 리사이즈 이벤트가
-  // 있어야 새 크기에 맞춰 다시 그려진다. 그대로 두면 이전(화면용) 크기로 그려진 차트가 인쇄 시
-  // 아래 표와 겹쳐 보이므로, 인쇄 미리보기 진입/종료 시점에 모든 차트를 강제로 리사이즈한다.
-  function resizeAllCharts() {
-    Object.values(charts).forEach((c) => {
-      try {
-        c.resize();
-      } catch {
-        /* noop */
-      }
-    });
-  }
-  window.addEventListener("beforeprint", resizeAllCharts);
-  window.addEventListener("afterprint", resizeAllCharts);
-
   return () => {
     monthSelect?.removeEventListener("change", onMonthChange);
     modeToggle?.removeEventListener("click", onModeToggleClick);
     tabEls.forEach((t) => t.removeEventListener("click", onTabClick));
-    window.removeEventListener("beforeprint", resizeAllCharts);
-    window.removeEventListener("afterprint", resizeAllCharts);
     Object.keys(charts).forEach(destroyChart);
   };
 }
