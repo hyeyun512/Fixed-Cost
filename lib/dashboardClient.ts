@@ -68,20 +68,31 @@ export function initDashboard(data: DashboardData): () => void {
    * 차이 금액이 REMARK_MIN_DIFF_WON(3천만원) 이상일 때만 "유의미"로 보고 채운다.
    * 원인 후보(byLabel)는 상위 항목과 같은 방향(초과/미달)으로 기여한 것 중 금액이 큰 순으로 최대 2개.
    * 초과(+)는 빨강, 미달(-)은 초록으로 통일해서 표기한다.
+   * 반대 방향(상쇄) 항목의 합이 그 자체로 유의미한 금액이면 — 즉 같은 방향 항목만 보여줄 경우
+   * 독자가 실제 차이보다 크게 오해할 수 있는 상황이면 — 상쇄 항목도 최대 2개까지 함께 짚어준다.
    */
   function attributionRemark(byLabel: { label: string; actual: number; budget: number }[], actual: number, budget: number): string {
     const diff = actual - budget;
     if (diff === 0 || Math.abs(diff) < REMARK_MIN_DIFF_WON) return "";
     const sign = diff > 0 ? 1 : -1;
-    const contributors = byLabel
-      .map((b) => ({ label: b.label, diff: b.actual - b.budget }))
+    const items = byLabel.map((b) => ({ label: b.label, diff: b.actual - b.budget }));
+    const fmtItem = (c: { label: string; diff: number }) =>
+      `<span class="${c.diff >= 0 ? "neg" : "pos"}">${c.label} ${c.diff >= 0 ? "+" : ""}${fmtM(c.diff)}백만원</span>`;
+    const contributors = items
       .filter((b) => Math.sign(b.diff) === sign)
       .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
       .slice(0, 2);
     if (!contributors.length) return "";
-    return contributors
-      .map((c) => `<span class="${c.diff >= 0 ? "neg" : "pos"}">${c.label} ${c.diff >= 0 ? "+" : ""}${fmtM(c.diff)}백만원</span>`)
-      .join(", ");
+    const mainText = contributors.map(fmtItem).join(", ");
+
+    const offsetters = items
+      .filter((b) => Math.sign(b.diff) === -sign)
+      .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+    const offsetSum = offsetters.reduce((s, b) => s + b.diff, 0);
+    if (Math.abs(offsetSum) < REMARK_MIN_DIFF_WON) return mainText;
+
+    const offsetText = offsetters.slice(0, 2).map(fmtItem).join(", ");
+    return `${mainText} (반면 ${offsetText} 등으로 상쇄)`;
   }
   /**
    * 누계 보기에서, 조직의 지급수수료 계열 차이가 특정 한 달에 쏠려 발생했는지 확인해 별도로 짚어준다.
