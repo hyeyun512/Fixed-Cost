@@ -170,7 +170,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         <SummaryCommentBox boxKey="evcs" accent="#1d4ed8" />
 
         <div className="evcs-top">
-          <div>
+          <div className="evcs-top-left">
             <div className="section-lead" style={{ marginTop: 0 }}>
               국내 · 해외 배부 현황 <span className="sub" id="evcsSplitSub" />
             </div>
@@ -187,6 +187,10 @@ export default function Dashboard({ data }: { data: DashboardData }) {
                 </div>
               </div>
               <div className="legend">
+                <span className="leg">
+                  <span className="leg-line" style={{ borderColor: "#0f172a" }} />
+                  합계
+                </span>
                 <span className="leg">
                   <span className="leg-line" style={{ borderColor: "#1d4ed8" }} />
                   국내

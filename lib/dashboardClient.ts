@@ -1642,23 +1642,25 @@ export function initDashboard(data: DashboardData): () => void {
   function evcsTrendChart(): AnyChart {
     const dom = trend.evcs_domestic.map((x) => x.actual);
     const ovs = trend.evcs_overseas.map((x) => x.actual);
+    const tot = months.map((_, i) => dom[i] + ovs[i]);
+    // 합계선은 항상 국내·해외 위에 놓이므로 가장 진한 색·굵은 선으로 두어 EVCS 전체 규모를 먼저 읽게 한다.
     return lineChartMulti("evcsTrendChart", months, [
+      { label: "합계", data: tot, borderColor: "#0f172a", backgroundColor: "#0f172a", tension: 0.3, pointRadius: 3, borderWidth: 2.5 },
       { label: "국내", data: dom, borderColor: "#1d4ed8", backgroundColor: "#1d4ed8", tension: 0.3, pointRadius: 3, borderWidth: 2 },
       { label: "해외", data: ovs, borderColor: "#94a3b8", backgroundColor: "#94a3b8", tension: 0.3, pointRadius: 3, borderWidth: 2 },
     ]);
   }
 
-  /** 국내/해외 추이를 문장 한 줄로 요약 — 첫 달 대비 최근 달, 그리고 직전월 대비 증감. */
+  /** 합계·국내·해외 추이를 문장 한 줄로 요약 — 첫 달 대비 최근 달 증감. */
   function evcsTrendNote(): string {
     if (months.length < 2) return "";
     const dom = trend.evcs_domestic.map((x) => x.actual);
     const ovs = trend.evcs_overseas.map((x) => x.actual);
+    const tot = months.map((_, i) => dom[i] + ovs[i]);
     const last = months.length - 1;
     const pct = (arr: number[]) => (arr[0] ? Math.round(((arr[last] - arr[0]) / arr[0]) * 100) : 0);
-    const dp = pct(dom);
-    const op = pct(ovs);
     const word = (p: number) => (p > 0 ? `+${p}% 증가` : p < 0 ? `${p}% 감소` : "보합");
-    return `${months[0]} 대비 ${months[last]} 기준 국내 ${word(dp)}, 해외 ${word(op)}`;
+    return `${months[0]} 대비 ${months[last]} 기준 합계 ${word(pct(tot))}, 국내 ${word(pct(dom))}, 해외 ${word(pct(ovs))}`;
   }
 
   function renderSumEvcs() {

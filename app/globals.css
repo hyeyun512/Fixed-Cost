@@ -183,10 +183,12 @@ body{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif;b
 .donut-legend li{display:flex;align-items:center;gap:8px;font-size:12px;color:#374151;padding:2.5px 0;white-space:nowrap}
 .dleg-dot{width:9px;height:9px;border-radius:2px;flex:none}
 
-/* ---- EVCS: 배부 현황 표 + 국내/해외 추이 차트를 한 줄에 ---- */
-.evcs-top{display:grid;grid-template-columns:auto minmax(320px,1fr);gap:16px;align-items:start;margin-bottom:4px}
-.evcs-trend-panel{padding:14px 16px}
-.evcs-trend-wrap{position:relative;height:172px}
+/* ---- EVCS: 배부 현황 표 + 국내/해외 추이 차트를 한 줄에 (아래선이 맞도록 같은 높이로 늘린다) ---- */
+.evcs-top{display:grid;grid-template-columns:auto minmax(320px,1fr);gap:16px;align-items:stretch;margin-bottom:4px}
+.evcs-top-left{display:flex;flex-direction:column}
+.evcs-top-left .tbl-box{flex:1}
+.evcs-trend-panel{padding:14px 16px;display:flex;flex-direction:column}
+.evcs-trend-wrap{position:relative;flex:1;min-height:150px}
 
 /* ---- EVCS: 구분별 금액 규모 (월별 구성 막대 + 누계/연간예산 막대) ---- */
 .evcs-cat-row{background:#fff;border:0.5px solid #e2e8f0;border-radius:12px;padding:12px 16px;margin-bottom:12px}
@@ -234,7 +236,12 @@ footer{text-align:center;padding:22px;color:#94a3b8;font-size:11.5px}
   .sum-block-row{margin-bottom:8px;gap:12px}
   .evcs-top{gap:10px}
   .evcs-trend-panel{padding:8px 10px}
-  .evcs-trend-wrap{height:104px}
+  /* 인쇄에서는 차트 높이를 고정한다. flex:1로 두면 화면에서 그려진 canvas 높이가 그대로 남아
+     오른쪽 칸이 필요 이상으로 커진다 (표가 있는 왼쪽 칸이 행 높이를 정하도록 둔다). */
+  .evcs-trend-wrap{flex:none;height:96px;min-height:0}
+  .evcs-trend-panel .panel-hd{margin-bottom:4px!important}
+  /* 위 .tbl-box 일괄 margin이 !important라 표·차트 아래선이 어긋난다 — 이 표만 여백 0으로 되돌린다. */
+  .evcs-top-left .tbl-box{margin-bottom:0!important}
   #tab-sum-evcs .tbl-hd{padding:5px 12px}
   .evcs-cat-row{padding:8px 12px;margin-bottom:8px}
   .evcs-cat-hd{margin-bottom:5px;gap:10px}
