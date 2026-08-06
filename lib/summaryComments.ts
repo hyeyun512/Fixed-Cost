@@ -3,11 +3,22 @@
  * 텍스트를 받아 이 파일을 수정해 배포하는 방식으로 관리한다 (경영진 보고용 고정 텍스트).
  * 아래 내용은 실제 데이터 확정 전 임의로 채운 샘플 문구다.
  */
-export const SUMMARY_COMMENTS: Record<"humax_total" | "evcs" | "humax_detail", string[]> = {
-  humax_total: [
-    "전사 집행률은 예산 범위 내에서 안정적으로 유지되고 있습니다.",
-    "본사·법인 간 집행 추이에 특이 편차는 발견되지 않았습니다.",
-    "다음 달에는 계절적 요인으로 지급수수료 항목의 증가가 예상됩니다.",
+export type SummaryCommentKey =
+  | "humax_total_month"
+  | "humax_total_cum"
+  | "evcs"
+  | "humax_detail";
+
+export const SUMMARY_COMMENTS: Record<SummaryCommentKey, string[]> = {
+  humax_total_month: [
+    "당월 집행률은 예산 범위 내에서 안정적으로 유지되고 있습니다.",
+    "본사·법인 간 당월 집행 추이에 특이 편차는 없습니다.",
+    "다음 달에는 계절적 요인으로 지급수수료 증가가 예상됩니다.",
+  ],
+  humax_total_cum: [
+    "누계 집행률은 연간 계획 대비 정상 범위에서 관리되고 있습니다.",
+    "본사가 누계 집행의 대부분을 차지하고 있습니다.",
+    "EVCS(해외) 배부 비중이 누계 기준으로 가장 크게 나타났습니다.",
   ],
   evcs: [
     "EVCS 국내 부문은 예산 대비 계획된 속도로 집행되고 있습니다.",

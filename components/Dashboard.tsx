@@ -3,12 +3,23 @@
 import { useEffect, useRef } from "react";
 import type { DashboardData } from "@/lib/types";
 import { initDashboard } from "@/lib/dashboardClient";
-import { SUMMARY_COMMENTS } from "@/lib/summaryComments";
+import { SUMMARY_COMMENTS, type SummaryCommentKey } from "@/lib/summaryComments";
 
-/** 경영진 보고용 고정 코멘트 — 화면에서 직접 고치지 않고, 텍스트를 받아 summaryComments.ts를 수정해 배포한다. */
-function SummaryCommentBox({ boxKey, accent }: { boxKey: keyof typeof SUMMARY_COMMENTS; accent: string }) {
+/**
+ * 경영진 보고용 고정 코멘트 — 화면에서 직접 고치지 않고, 텍스트를 받아 summaryComments.ts를 수정해 배포한다.
+ * variant="side"는 표 우측에 세로로 붙는 형태, 기본값은 표 위에 가로로 펼치는 형태.
+ */
+function SummaryCommentBox({
+  boxKey,
+  accent,
+  variant,
+}: {
+  boxKey: SummaryCommentKey;
+  accent: string;
+  variant?: "side";
+}) {
   return (
-    <div className="summary-callout" style={{ borderLeftColor: accent }}>
+    <div className={`summary-callout${variant === "side" ? " summary-callout-side" : ""}`} style={{ borderLeftColor: accent }}>
       <div className="summary-callout-title" style={{ color: accent }}>
         Summary
       </div>
@@ -106,24 +117,28 @@ export default function Dashboard({ data }: { data: DashboardData }) {
             <div className="sheet-title">Humax합계</div>
           </div>
         </div>
-        <SummaryCommentBox boxKey="humax_total" accent="#1d4ed8" />
-
-        <div className="section-lead">상세</div>
-        <div className="tbl-box" style={{ marginBottom: 16 }}>
-          <div className="tbl-hd">
-            당월 <span className="sub" id="sumTotalMonthSub" />
+        <div className="summary-row">
+          <div className="tbl-box" style={{ marginBottom: 0 }}>
+            <div className="tbl-hd">
+              당월 <span className="sub" id="sumTotalMonthSub" />
+            </div>
+            <div className="tbl-scroll">
+              <div id="sumTotalMonthTable" />
+            </div>
           </div>
-          <div className="tbl-scroll">
-            <div id="sumTotalMonthTable" />
-          </div>
+          <SummaryCommentBox boxKey="humax_total_month" accent="#1d4ed8" variant="side" />
         </div>
-        <div className="tbl-box" style={{ marginBottom: 0 }}>
-          <div className="tbl-hd">
-            당월 누계 <span className="sub" id="sumTotalCumSub" />
+
+        <div className="summary-row">
+          <div className="tbl-box" style={{ marginBottom: 0 }}>
+            <div className="tbl-hd">
+              당월 누계 <span className="sub" id="sumTotalCumSub" />
+            </div>
+            <div className="tbl-scroll">
+              <div id="sumTotalCumTable" />
+            </div>
           </div>
-          <div className="tbl-scroll">
-            <div id="sumTotalCumTable" />
-          </div>
+          <SummaryCommentBox boxKey="humax_total_cum" accent="#1d4ed8" variant="side" />
         </div>
       </div>
 

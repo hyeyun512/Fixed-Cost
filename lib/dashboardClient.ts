@@ -1222,6 +1222,15 @@ export function initDashboard(data: DashboardData): () => void {
   }
 
   // ================= SUMMARY① Humax합계 / SUMMARY③ Humax합계_상세 (공용) =================
+  /**
+   * Summary 표용 colgroup — 첫 열(라벨)만 넓게 두고 나머지 데이터 열은 모두 같은 너비로 고정한다.
+   * table-layout:fixed는 첫 행으로 열 너비를 잡는데 Summary 표는 헤더에 rowspan/colspan이 섞여 있어
+   * 열 대응이 어긋난다. colgroup으로 열 너비를 직접 지정해 그 문제를 피한다.
+   */
+  function colgroupHtml(firstW: number, colW: number, dataCols: number): string {
+    return `<colgroup><col style="width:${firstW}px">${`<col style="width:${colW}px">`.repeat(dataCols)}</colgroup>`;
+  }
+
   /** Summary①/③의 7열(합계(A+B)/STB/MOBILITY/EVCS국내/EVCS해외/HUMAX공통/건물) 표 한 행 — STB~건물 값을 모두 채워서 보여준다. */
   type SumDetailRow = { label: string; alloc: AllocValues13 & { humaxTotal: number }; bold?: boolean; indent?: boolean };
 
@@ -1238,8 +1247,11 @@ export function initDashboard(data: DashboardData): () => void {
         );
       })
       .join("");
+    // sum-tbl: 표 폭을 내용에 맞게 줄이고(width:auto) 데이터 열은 모두 같은 너비로 고정한다.
     return (
-      `<table class="pl-tbl alloc-tbl"><thead>` +
+      `<table class="pl-tbl alloc-tbl sum-tbl">` +
+      colgroupHtml(132, 98, 7) +
+      `<thead>` +
       `<tr><th rowspan="2">Company</th><th rowspan="2" class="alloc-tot-col">(A+B)<br>합계</th><th colspan="5" class="grp-a">(A) HUMAX</th><th rowspan="2">(B)<br>건물</th></tr>` +
       `<tr><th>STB</th><th>MOBILITY</th><th>EVCS(국내)</th><th>EVCS(해외)</th><th>HUMAX(공통)</th></tr>` +
       `</thead><tbody>${body}</tbody></table>`
@@ -1329,7 +1341,9 @@ export function initDashboard(data: DashboardData): () => void {
     const totO = e.total.overseas.actual;
     const totRow = `<tr class="tot"><td>합계</td><td>${fmtM(totD)}</td><td>${fmtM(totO)}</td><td>${fmtM(totD + totO)}</td></tr>`;
     return (
-      `<table class="pl-tbl"><thead><tr><th>Company</th><th>국내</th><th>해외</th><th>합계</th></tr></thead>` +
+      `<table class="pl-tbl sum-tbl">` +
+      colgroupHtml(132, 110, 3) +
+      `<thead><tr><th>Company</th><th>국내</th><th>해외</th><th>합계</th></tr></thead>` +
       `<tbody>${rowHtml("본사")}${rowHtml("법인")}${totRow}</tbody></table>`
     );
   }
@@ -1339,7 +1353,10 @@ export function initDashboard(data: DashboardData): () => void {
     const body = rows.map((c) => row(c.category, c.actual, c.budget)).join("");
     const totA = rows.reduce((s, c) => s + c.actual, 0);
     const totB = rows.reduce((s, c) => s + c.budget, 0);
-    return table5(body + row("합계", totA, totB, "tot"));
+    return table5(body + row("합계", totA, totB, "tot")).replace(
+      '<table class="pl-tbl">',
+      `<table class="pl-tbl sum-tbl">${colgroupHtml(110, 86, 4)}`
+    );
   }
 
   function renderSumEvcs() {
