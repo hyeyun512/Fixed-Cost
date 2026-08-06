@@ -19,6 +19,8 @@ body{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif;b
 .tab.active{color:#1d4ed8;border-bottom-color:#2563eb;font-weight:700}
 .tab:hover:not(.active){color:#374151}
 .tab-sep{width:0.5px;height:18px;background:#e2e8f0;margin:0 2px}
+.tab.tab-summary-lv{font-weight:700}
+.tab.tab-summary-lv.active{background:#eff6ff}
 .tab.tab-sub{font-size:12.5px;color:#94a3b8;font-weight:600}
 .tab.tab-sub.active{color:#475569;border-bottom-color:#94a3b8}
 .tab.tab-sub:hover:not(.active){color:#64748b}
@@ -83,6 +85,8 @@ body{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif;b
 .pl-tbl .remark-cell{text-align:left;white-space:normal;font-size:11.5px;color:#64748b;max-width:220px}
 .pl-tbl th.remark-th{text-align:center}
 .pl-tbl .fee-sub td:first-child{padding-left:26px;color:#64748b;font-size:12px}
+.pl-tbl .pct-aux{color:#94a3b8;font-weight:400;font-size:11.5px}
+.pl-tbl th.pct-aux{color:#cbd5e1}
 .pl-tbl.alloc-tbl th,.pl-tbl.alloc-tbl td{padding:8px 10px}
 .pl-tbl.alloc-tbl .alloc-tot-col{background:#eff6ff}
 .pl-tbl.alloc-tbl .alloc-shared-col{background:#faf5ff;font-weight:700;color:#7c3aed}
@@ -123,9 +127,19 @@ body{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif;b
 .section-lead{font-size:13px;font-weight:700;color:#1a202c;margin:26px 0 4px}
 .section-lead .sub{font-weight:400;color:#94a3b8;font-size:12px;margin-left:6px}
 
+.summary-split{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
+.summary-note-panel{display:flex;flex-direction:column;position:sticky;top:70px}
+.summary-note{width:100%;flex:1;min-height:220px;resize:vertical;font-family:inherit;font-size:13px;line-height:1.5;color:#1a202c;border:0.5px solid #cbd5e1;border-radius:8px;padding:10px 12px;margin-top:4px}
+.summary-note:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.summary-note-actions{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px}
+.summary-note-status{font-size:11.5px;color:#94a3b8}
+.summary-note-save{font-family:inherit;font-size:12.5px;font-weight:700;color:#fff;background:#2563eb;border:none;border-radius:8px;padding:7px 16px;cursor:pointer}
+.summary-note-save:hover{background:#1d4ed8}
+
 footer{text-align:center;padding:22px;color:#94a3b8;font-size:11.5px}
 
 @media (max-width:900px){
   .kpi-row{grid-template-columns:repeat(2,1fr)}
-  .chart-2col,.chart-2col.rev,.chart-2eq{grid-template-columns:1fr}
+  .chart-2col,.chart-2col.rev,.chart-2eq,.summary-split{grid-template-columns:1fr}
+  .summary-note-panel{position:static}
 }

@@ -19,6 +19,7 @@ import type {
   AllocationBoard,
   AllocValues13,
   AllocAccountValues,
+  EvcsCategoryAnnualBudgetByHq,
 } from "./types";
 
 const BUDGET_TABLE = "26년 예산(BP)";
@@ -372,6 +373,31 @@ export async function loadDashboardData(): Promise<DashboardData> {
       totB.dom += n(r.evcs_domestic_krw);
       totB.ovs += n(r.evcs_overseas_krw);
     }
+    // 국내/해외 실적·예산을 본사/법인 기준으로도 나눠 집계 (Summary②의 당월/당월누계 표용).
+    const byHqAcc: Record<string, { dom: number; ovs: number }> = { 본사: { dom: 0, ovs: 0 }, 법인: { dom: 0, ovs: 0 } };
+    const byHqBud: Record<string, { dom: number; ovs: number }> = { 본사: { dom: 0, ovs: 0 }, 법인: { dom: 0, ovs: 0 } };
+    for (const r of actRows) {
+      const hq = effectiveAllocHq(r);
+      if (hq !== "본사" && hq !== "법인") continue;
+      byHqAcc[hq].dom += n(r.evcs_domestic_krw);
+      byHqAcc[hq].ovs += n(r.evcs_overseas_krw);
+    }
+    for (const r of budRows) {
+      const hq = effectiveAllocHq(r);
+      if (hq !== "본사" && hq !== "법인") continue;
+      byHqBud[hq].dom += n(r.evcs_domestic_krw);
+      byHqBud[hq].ovs += n(r.evcs_overseas_krw);
+    }
+    const byHq = {
+      본사: {
+        domestic: { actual: byHqAcc.본사.dom, budget: byHqBud.본사.dom },
+        overseas: { actual: byHqAcc.본사.ovs, budget: byHqBud.본사.ovs },
+      },
+      법인: {
+        domestic: { actual: byHqAcc.법인.dom, budget: byHqBud.법인.dom },
+        overseas: { actual: byHqAcc.법인.ovs, budget: byHqBud.법인.ovs },
+      },
+    };
     const catA = new Map<string, { dom: number; ovs: number }>();
     const catB = new Map<string, { dom: number; ovs: number }>();
     for (const r of actRows) {
@@ -427,6 +453,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
     const categoryByHq: CategoryByHq = { 총합계: evcsCategoryRows(), 본사: evcsCategoryRows("본사"), 법인: evcsCategoryRows("법인") };
     return {
       total: { domestic: { actual: totA.dom, budget: totB.dom }, overseas: { actual: totA.ovs, budget: totB.ovs } },
+      byHq,
       byCategory,
       categoryByHq,
       evcsSummary: evcsSummaryForRows(actRows, budRows),
@@ -715,6 +742,21 @@ export async function loadDashboardData(): Promise<DashboardData> {
     return { cert_domestic_full, cert_overseas_full, fee_by_account_full };
   }
 
+  // EVCS 배부금액(국내+해외 합산) 기준 구분별 "연 예산" — 선택 월과 무관하게 예산 테이블 전체(1~12월)를 본사/법인으로 나눠 합산.
+  // Summary②(EVCS사업부) 구분별 상세 표의 "연 예산" 컬럼에서 사용한다.
+  function evcsCategoryAnnualBudgetForHq(hq: string) {
+    const bud = new Map<string, number>();
+    for (const r of budgetRowsFullYear) {
+      if (!r.category || effectiveAllocHq(r) !== hq) continue;
+      bud.set(r.category, (bud.get(r.category) || 0) + evcsKrwOf(r));
+    }
+    return catOrder.map((c) => ({ category: c, budget: bud.get(c) || 0 }));
+  }
+  const evcsCategoryAnnualBudgetByHq: EvcsCategoryAnnualBudgetByHq = {
+    본사: evcsCategoryAnnualBudgetForHq("본사"),
+    법인: evcsCategoryAnnualBudgetForHq("법인"),
+  };
+
   return {
     months,
     allMonths,
@@ -723,5 +765,6 @@ export async function loadDashboardData(): Promise<DashboardData> {
     sourceTable: actualTable,
     byMonth,
     trend,
+    evcsCategoryAnnualBudgetByHq,
   };
 }

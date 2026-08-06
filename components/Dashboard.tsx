@@ -1,19 +1,39 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { DashboardData } from "@/lib/types";
+import type { DashboardData, SummaryNotes } from "@/lib/types";
 import { initDashboard } from "@/lib/dashboardClient";
 
-export default function Dashboard({ data }: { data: DashboardData }) {
+function SummaryNoteBox({ idPrefix }: { idPrefix: string }) {
+  return (
+    <div className="panel summary-note-panel">
+      <div className="panel-hd">
+        <div>
+          <div className="panel-title">[Summary]</div>
+          <div className="panel-sub">담당자 코멘트 · 매월 직접 입력 · 저장 버튼을 눌러야 반영됩니다</div>
+        </div>
+      </div>
+      <textarea className="summary-note" id={`${idPrefix}Note`} rows={9} placeholder="이번 달 주요 코멘트를 입력하세요" />
+      <div className="summary-note-actions">
+        <span className="summary-note-status" id={`${idPrefix}NoteStatus`} />
+        <button type="button" className="summary-note-save" id={`${idPrefix}NoteSave`}>
+          저장
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function Dashboard({ data, notes }: { data: DashboardData; notes: SummaryNotes }) {
   const mounted = useRef(false);
 
   useEffect(() => {
     // React StrictMode in dev runs effects twice; guard so we don't double-init.
-    const cleanup = initDashboard(data);
+    const cleanup = initDashboard(data, notes);
     mounted.current = true;
     return cleanup;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
+  }, [data, notes]);
 
   return (
     <>
@@ -53,29 +73,118 @@ export default function Dashboard({ data }: { data: DashboardData }) {
       </div>
 
       <div className="tab-bar">
-        <div className="tab" data-tab="blank">
-          ① Summary
+        <div className="tab tab-summary-lv active" data-tab="sum-total">
+          ① Humax합계
         </div>
-        <div className="tab active" data-tab="summary">
-          ② Humax(전사)
+        <div className="tab tab-summary-lv" data-tab="sum-evcs">
+          ② EVCS사업부
         </div>
-        <div className="tab" data-tab="evcs">
-          ③ EVCS(사업부)
+        <div className="tab tab-summary-lv" data-tab="sum-detail">
+          ③ Humax합계_상세
         </div>
         <div className="tab-sep" />
-        <div className="tab tab-sub" data-tab="category">
+        <div className="tab tab-sub" data-tab="summary">
           Appendix A
         </div>
-        <div className="tab tab-sub" data-tab="alloc">
+        <div className="tab tab-sub" data-tab="evcs">
           Appendix B
+        </div>
+        <div className="tab tab-sub" data-tab="category">
+          Appendix C
+        </div>
+        <div className="tab tab-sub" data-tab="alloc">
+          Appendix D
         </div>
       </div>
 
-      {/* ===================== SUMMARY(BLANK) TAB ===================== */}
-      <div id="tab-blank" className="content" />
+      {/* ===================== SUMMARY① Humax합계 ===================== */}
+      <div id="tab-sum-total" className="content active">
+        <div className="sheet-hd">
+          <div className="sheet-hd-bar" style={{ background: "#1d4ed8" }} />
+          <div>
+            <div className="sheet-eyebrow">Summary ①</div>
+            <div className="sheet-title">Humax합계</div>
+          </div>
+        </div>
+        <div className="summary-split">
+          <div className="tbl-box" style={{ marginBottom: 0 }}>
+            <div className="tbl-hd">
+              Company별 합계 <span className="sub" id="sumTotalSub" />
+            </div>
+            <div className="tbl-scroll">
+              <div id="sumTotalTable" />
+            </div>
+          </div>
+          <SummaryNoteBox idPrefix="sumTotal" />
+        </div>
+      </div>
 
-      {/* ===================== SUMMARY TAB ===================== */}
-      <div id="tab-summary" className="content active">
+      {/* ===================== SUMMARY② EVCS사업부 ===================== */}
+      <div id="tab-sum-evcs" className="content">
+        <div className="sheet-hd">
+          <div className="sheet-hd-bar" style={{ background: "#0891b2" }} />
+          <div>
+            <div className="sheet-eyebrow">Summary ②</div>
+            <div className="sheet-title">EVCS사업부</div>
+          </div>
+        </div>
+        <div className="summary-split">
+          <div>
+            <div className="chart-2eq" style={{ marginBottom: 16 }}>
+              <div id="evcsSumMonthTable" />
+              <div id="evcsSumCumTable" />
+            </div>
+            <div className="section-lead">
+              구분별 상세<span className="sub" id="sumEvcsSub" />
+            </div>
+            <div className="tbl-box" style={{ marginBottom: 16 }}>
+              <div className="tbl-hd">본사</div>
+              <div className="tbl-scroll">
+                <div id="evcsCatTrendHqTable" />
+              </div>
+            </div>
+            <div className="tbl-box" style={{ marginBottom: 0 }}>
+              <div className="tbl-hd">법인</div>
+              <div className="tbl-scroll">
+                <div id="evcsCatTrendCorpTable" />
+              </div>
+            </div>
+          </div>
+          <SummaryNoteBox idPrefix="sumEvcs" />
+        </div>
+      </div>
+
+      {/* ===================== SUMMARY③ Humax합계_상세 ===================== */}
+      <div id="tab-sum-detail" className="content">
+        <div className="sheet-hd">
+          <div className="sheet-hd-bar" style={{ background: "#7c3aed" }} />
+          <div>
+            <div className="sheet-eyebrow">Summary ③</div>
+            <div className="sheet-title">Humax합계_상세</div>
+          </div>
+        </div>
+        <div className="summary-split">
+          <div className="tbl-box" style={{ marginBottom: 0 }}>
+            <div className="tbl-hd">
+              합계 · 본사(구분별) · 법인(소속사별) <span className="sub" id="sumDetailSub" />
+            </div>
+            <div className="tbl-scroll">
+              <div id="sumDetailTable" />
+            </div>
+          </div>
+          <SummaryNoteBox idPrefix="sumDetail" />
+        </div>
+      </div>
+
+      {/* ===================== APPENDIX A (구 Humax(전사) 상세) ===================== */}
+      <div id="tab-summary" className="content">
+        <div className="sheet-hd">
+          <div className="sheet-hd-bar" />
+          <div>
+            <div className="sheet-eyebrow">Appendix A</div>
+            <div className="sheet-title">Humax(전사) 상세</div>
+          </div>
+        </div>
         <div id="summaryInsight" />
         <div className="kpi-row" id="summaryKpis" />
 
@@ -151,8 +260,15 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         </div>
       </div>
 
-      {/* ===================== EVCS TAB ===================== */}
+      {/* ===================== APPENDIX B (구 EVCS(사업부) 상세) ===================== */}
       <div id="tab-evcs" className="content">
+        <div className="sheet-hd">
+          <div className="sheet-hd-bar" />
+          <div>
+            <div className="sheet-eyebrow">Appendix B</div>
+            <div className="sheet-title">EVCS(사업부) 상세</div>
+          </div>
+        </div>
         <div id="evcsInsight" />
         <div className="kpi-row" id="evcsKpis" />
 
@@ -292,12 +408,12 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         </div>
       </div>
 
-      {/* ===================== CATEGORY TAB ===================== */}
+      {/* ===================== CATEGORY TAB (Appendix C) ===================== */}
       <div id="tab-category" className="content">
         <div className="sheet-hd">
           <div className="sheet-hd-bar" />
           <div>
-            <div className="sheet-eyebrow">Appendix A</div>
+            <div className="sheet-eyebrow">Appendix C</div>
             <div className="sheet-title">Humax 계정별</div>
           </div>
         </div>
@@ -354,12 +470,12 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         </div>
       </div>
 
-      {/* ===================== ALLOCATION BOARD TAB ===================== */}
+      {/* ===================== ALLOCATION BOARD TAB (Appendix D) ===================== */}
       <div id="tab-alloc" className="content">
         <div className="sheet-hd">
           <div className="sheet-hd-bar" />
           <div>
-            <div className="sheet-eyebrow">Appendix B</div>
+            <div className="sheet-eyebrow">Appendix D</div>
             <div className="sheet-title">Humax 배부판</div>
           </div>
         </div>
