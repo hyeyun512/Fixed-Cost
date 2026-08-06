@@ -136,10 +136,48 @@ body{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif;b
 
 /* 표를 내용에 맞게 좁히고(width:auto) 데이터 열은 모두 동일 너비로 맞춘다. 너비는 표별로 CSS 변수로 지정. */
 .summary-row{display:grid;grid-template-columns:auto minmax(240px,1fr);gap:16px;align-items:start;margin-bottom:16px}
+.summary-mom-title{font-size:11px;font-weight:800;letter-spacing:.6px;color:#b45309;margin:14px 0 8px;padding-top:12px;border-top:0.5px solid #e7e5e0}
+.summary-mom-title:empty{display:none}
+
 .sum-tbl{width:auto;table-layout:fixed}
 /* Summary 표는 폭이 내용에 맞게 좁아지므로, 감싸는 박스도 같이 줄여 빈 여백이 남지 않게 한다. */
 .summary-row .tbl-box,#tab-sum-evcs .tbl-box,#tab-sum-detail .tbl-box{width:max-content;max-width:100%}
 #tab-sum-evcs .chart-2eq{display:flex;flex-wrap:wrap;align-items:flex-start}
+
+/* ---- Summary 표: 파랑 계열로 통일하고 (A+B) 합계 / (A) 그룹 / (B) 건물을 뚜렷하게 나눈다 ---- */
+.sum-tbl th{color:#64748b;background:#f8fafc;border-bottom:1px solid #cbd5e1}
+.sum-tbl td{border-bottom:0.5px solid #eef2f7}
+/* (A+B) 합계 열: 가장 진한 파랑 + 굵게 — A·B 세부 열과 확실히 구분되는 "상위 합계" */
+.sum-tbl .alloc-tot-col{background:#dbeafe;font-weight:700;color:#1e3a8a}
+.sum-tbl th.alloc-tot-col{background:#bfdbfe;color:#1e3a8a}
+/* (A) HUMAX 그룹 헤더: 연한 파랑 (Appendix의 초록 대신 Summary 시트는 파랑 계열로 통일) */
+.pl-tbl.alloc-tbl.sum-tbl th.grp-a{background:#eff6ff;color:#1d4ed8}
+/* 그룹 경계선 — 합계 | (A) 5개 열 | (B) 건물 */
+.sum-tbl th.alloc-tot-col,.sum-tbl td.alloc-tot-col{border-left:2px solid #93c5fd;border-right:2px solid #93c5fd}
+.sum-tbl thead tr:first-child th:last-child,
+.sum-tbl tbody td:last-child{border-left:2px solid #cbd5e1}
+/* EVCS 표의 소계(합계) 열도 같은 규칙으로 강조 */
+.sum-tbl .col-sum{background:#dbeafe;font-weight:700;color:#1e3a8a;border-left:2px solid #93c5fd}
+.sum-tbl th.col-sum{background:#bfdbfe;color:#1e3a8a}
+.sum-tbl .tot td{background:#eff6ff;color:#1e3a8a;border-top:1px solid #93c5fd}
+.sum-tbl .tot .alloc-tot-col,.sum-tbl .tot .col-sum{background:#bfdbfe}
+.sum-tbl .pct-aux{color:#94a3b8;font-size:11.5px}
+.sum-tbl th.pct-aux{color:#94a3b8}
+
+/* ---- 도넛(Summary① 배부 구성비) ---- */
+.donut-box{display:flex;align-items:center;gap:14px;background:#fff;border:0.5px solid #e2e8f0;border-radius:12px;padding:12px 16px;margin-bottom:12px}
+.donut-wrap{position:relative;width:158px;height:158px;flex:none}
+.donut-legend{list-style:none;margin:0;padding:0;flex:1;min-width:0}
+.donut-legend li{display:flex;align-items:center;gap:8px;font-size:12px;color:#374151;padding:2.5px 0}
+.dleg-dot{width:9px;height:9px;border-radius:2px;flex:none}
+.dleg-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dleg-val{font-variant-numeric:tabular-nums;font-weight:600;color:#1a202c}
+.dleg-pct{width:38px;text-align:right;font-variant-numeric:tabular-nums;color:#94a3b8}
+
+/* ---- EVCS: 배부 현황 표 + 국내/해외 추이 차트를 한 줄에 ---- */
+.evcs-top{display:grid;grid-template-columns:auto minmax(320px,1fr);gap:16px;align-items:start;margin-bottom:4px}
+.evcs-trend-panel{padding:14px 16px}
+.evcs-trend-wrap{position:relative;height:172px}
 
 footer{text-align:center;padding:22px;color:#94a3b8;font-size:11.5px}
 
@@ -168,4 +206,14 @@ footer{text-align:center;padding:22px;color:#94a3b8;font-size:11.5px}
   .pl-tbl th,.pl-tbl.alloc-tbl th{padding:4px 10px!important}
   .pl-tbl td,.pl-tbl.alloc-tbl td{padding:3px 10px!important}
   .chart-2eq{gap:12px;margin-bottom:10px}
+  .donut-box{padding:6px 10px;margin-bottom:6px;gap:10px}
+  .donut-wrap{width:104px;height:104px}
+  .donut-legend li{font-size:10.5px;padding:0}
+  .evcs-top{gap:10px}
+  .evcs-trend-panel{padding:8px 10px}
+  .evcs-trend-wrap{height:104px}
+  #tab-sum-evcs .tbl-hd{padding:5px 12px}
+  .summary-mom-title{margin:10px 0 6px;padding-top:8px}
+  .summary-callout{padding:8px 12px!important;margin-bottom:6px!important}
+  .summary-comment-list{font-size:11.5px;line-height:1.4}
 }

@@ -147,6 +147,11 @@ export type Trend = {
   fee_by_account_full: Record<string, FullTrendPoint[]>;
 };
 
+export type CategoryBudgetRow = { category: string; budget: number };
+/** EVCS 배부금액 기준 연간(1~12월) 예산 — 누계 집행률 산출에만 쓴다 (EVCS 시트는 예산 대비 비교표를 두지 않음). */
+export type EvcsAnnualBudgetHq = { domestic: number; overseas: number; total: number; byCategory: CategoryBudgetRow[] };
+export type EvcsAnnualBudget = { 본사: EvcsAnnualBudgetHq; 법인: EvcsAnnualBudgetHq };
+
 export type DashboardData = {
   months: string[];
   /** 예산 테이블 기준 연간 전체 월 목록 (1월~12월, 미경과 기간 포함). */
@@ -156,4 +161,5 @@ export type DashboardData = {
   sourceTable: string;
   byMonth: Record<string, MonthBlock>;
   trend: Trend;
+  evcsAnnualBudget: EvcsAnnualBudget;
 };

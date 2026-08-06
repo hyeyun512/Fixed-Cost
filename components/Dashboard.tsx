@@ -126,7 +126,15 @@ export default function Dashboard({ data }: { data: DashboardData }) {
               <div id="sumTotalMonthTable" />
             </div>
           </div>
-          <SummaryCommentBox boxKey="humax_total_month" accent="#1d4ed8" variant="side" />
+          <div>
+            <div className="donut-box">
+              <div className="donut-wrap">
+                <canvas id="sumTotalMonthDonut" />
+              </div>
+              <ul className="donut-legend" id="sumTotalMonthDonutLegend" />
+            </div>
+            <SummaryCommentBox boxKey="humax_total_month" accent="#1d4ed8" variant="side" />
+          </div>
         </div>
 
         <div className="summary-row">
@@ -138,7 +146,15 @@ export default function Dashboard({ data }: { data: DashboardData }) {
               <div id="sumTotalCumTable" />
             </div>
           </div>
-          <SummaryCommentBox boxKey="humax_total_cum" accent="#1d4ed8" variant="side" />
+          <div>
+            <div className="donut-box">
+              <div className="donut-wrap">
+                <canvas id="sumTotalCumDonut" />
+              </div>
+              <ul className="donut-legend" id="sumTotalCumDonutLegend" />
+            </div>
+            <SummaryCommentBox boxKey="humax_total_cum" accent="#1d4ed8" variant="side" />
+          </div>
         </div>
       </div>
 
@@ -153,14 +169,42 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         </div>
         <SummaryCommentBox boxKey="evcs" accent="#1d4ed8" />
 
-        <div className="section-lead">
-          국내 · 해외 배부 현황 <span className="sub" id="evcsSplitSub" />
+        <div className="evcs-top">
+          <div>
+            <div className="section-lead" style={{ marginTop: 0 }}>
+              국내 · 해외 배부 현황 <span className="sub" id="evcsSplitSub" />
+            </div>
+            <div className="tbl-box" style={{ marginBottom: 0 }}>
+              <div id="evcsSplitTable" />
+            </div>
+          </div>
+          <div className="panel evcs-trend-panel">
+            <div className="panel-hd" style={{ marginBottom: 8 }}>
+              <div>
+                <div className="panel-title">국내 · 해외 월별 실적 추이</div>
+                <div className="panel-sub" id="evcsTrendSub">
+                  &nbsp;
+                </div>
+              </div>
+              <div className="legend">
+                <span className="leg">
+                  <span className="leg-line" style={{ borderColor: "#1d4ed8" }} />
+                  국내
+                </span>
+                <span className="leg">
+                  <span className="leg-line" style={{ borderColor: "#94a3b8" }} />
+                  해외
+                </span>
+              </div>
+            </div>
+            <div className="evcs-trend-wrap">
+              <canvas id="evcsTrendChart" />
+            </div>
+          </div>
         </div>
-        <div className="tbl-box" style={{ marginBottom: 16 }}>
-          <div id="evcsSplitTable" />
-        </div>
+
         <div className="section-lead">
-          구분별 상세<span className="sub" id="sumEvcsSub" />
+          구분별 금액 규모<span className="sub" id="sumEvcsSub" />
         </div>
         <div className="chart-2eq">
           <div className="tbl-box" style={{ marginBottom: 0 }}>
@@ -183,14 +227,29 @@ export default function Dashboard({ data }: { data: DashboardData }) {
             <div className="sheet-title">Humax합계_상세</div>
           </div>
         </div>
-        <SummaryCommentBox boxKey="humax_detail" accent="#1d4ed8" />
-
-        <div className="section-lead">
-          상세 <span className="sub" id="sumDetailSub" />
-        </div>
-        <div className="tbl-box" style={{ marginBottom: 0 }}>
-          <div className="tbl-scroll">
-            <div id="sumDetailTable" />
+        <div className="summary-row">
+          <div className="tbl-box" style={{ marginBottom: 0 }}>
+            <div className="tbl-hd">
+              본사 · 법인 집행 상세 <span className="sub" id="sumDetailSub" />
+            </div>
+            <div className="tbl-scroll">
+              <div id="sumDetailTable" />
+            </div>
+          </div>
+          <div className="summary-callout summary-callout-side" style={{ borderLeftColor: "#1d4ed8" }}>
+            <div className="summary-callout-title" style={{ color: "#1d4ed8" }}>
+              Summary
+            </div>
+            <ul className="summary-comment-list">
+              {SUMMARY_COMMENTS.humax_detail.map((line, i) => (
+                <li key={i}>
+                  <span className="summary-comment-dot" style={{ background: "#1d4ed8" }} />
+                  {line}
+                </li>
+              ))}
+            </ul>
+            <div className="summary-mom-title" id="sumDetailMomTitle" />
+            <ul className="summary-comment-list" id="sumDetailMomList" />
           </div>
         </div>
       </div>
