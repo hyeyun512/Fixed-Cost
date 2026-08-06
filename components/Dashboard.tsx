@@ -178,55 +178,50 @@ export default function Dashboard({ data }: { data: DashboardData }) {
               <div id="evcsSplitTable" />
             </div>
           </div>
-          <div className="panel evcs-trend-panel">
-            <div className="panel-hd" style={{ marginBottom: 8 }}>
-              <div>
-                <div className="panel-title">국내 · 해외 월별 실적 추이</div>
-                <div className="panel-sub" id="evcsTrendSub">
-                  &nbsp;
-                </div>
-              </div>
-              <div className="legend">
-                <span className="leg">
-                  <span className="leg-line" style={{ borderColor: "#0f172a" }} />
-                  합계
-                </span>
-                <span className="leg">
-                  <span className="leg-line" style={{ borderColor: "#1d4ed8" }} />
-                  국내
-                </span>
-                <span className="leg">
-                  <span className="leg-line" style={{ borderColor: "#94a3b8" }} />
-                  해외
-                </span>
-              </div>
+          <div className="evcs-top-right">
+            <div className="section-lead" style={{ marginTop: 0 }}>
+              구분별 금액 규모 <span className="sub" id="sumEvcsSub" />
             </div>
-            <div className="evcs-trend-wrap">
-              <canvas id="evcsTrendChart" />
+            <div className="donut-pair">
+              {(["Hq", "Corp"] as const).map((key) => (
+                <div className="donut-box donut-card" key={key}>
+                  <div className="donut-card-title">{key === "Hq" ? "본사" : "법인"}</div>
+                  <div className="donut-card-body">
+                    <div className="donut-wrap">
+                      <canvas id={`evcsDonut${key}`} />
+                    </div>
+                    <ul className="donut-legend" id={`evcsDonut${key}Legend`} />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
         <div className="section-lead">
-          구분별 금액 규모<span className="sub" id="sumEvcsSub" />
+          국내 · 해외 월별 실적 추이 <span className="sub" id="evcsTrendSub" />
         </div>
-        {(["Hq", "Corp"] as const).map((key) => (
-          <div className="evcs-cat-row" key={key}>
-            <div className="evcs-cat-hd">
-              <span className="evcs-cat-name">{key === "Hq" ? "본사" : "법인"}</span>
-              <span className="legend" id={`evcsCat${key}Legend`} />
-              <span className="evcs-cat-rate" id={`evcsCat${key}Rate`} />
-            </div>
-            <div className="evcs-cat-charts">
-              <div className="evcs-cat-chart">
-                <canvas id={`evcsCat${key}Monthly`} />
-              </div>
-              <div className="evcs-cat-chart evcs-cat-chart-cum">
-                <canvas id={`evcsCat${key}Cum`} />
-              </div>
+        <div className="panel evcs-trend-panel">
+          <div className="panel-hd evcs-trend-hd">
+            <div className="legend">
+              <span className="leg">
+                <span className="leg-line" style={{ borderColor: "#0f172a" }} />
+                합계
+              </span>
+              <span className="leg">
+                <span className="leg-line" style={{ borderColor: "#1d4ed8" }} />
+                국내
+              </span>
+              <span className="leg">
+                <span className="leg-line" style={{ borderColor: "#94a3b8" }} />
+                해외
+              </span>
             </div>
           </div>
-        ))}
+          <div className="evcs-trend-wrap">
+            <canvas id="evcsTrendChart" />
+          </div>
+        </div>
       </div>
 
       {/* ===================== SUMMARY③ Humax합계_상세 ===================== */}
@@ -246,6 +241,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
             <div className="tbl-scroll">
               <div id="sumDetailTable" />
             </div>
+            <div className="note" id="sumDetailNote" />
           </div>
           <div className="summary-callout summary-callout-side" style={{ borderLeftColor: "#1d4ed8" }}>
             <div className="summary-callout-title" style={{ color: "#1d4ed8" }}>
@@ -320,27 +316,6 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           </div>
         </div>
 
-        <div className="chart-2col">
-          <div className="tbl-box" style={{ marginBottom: 0 }}>
-            <div className="tbl-hd">
-              본사 · 법인 요약 <span className="sub" id="sumTblSub" />
-            </div>
-            <div id="hqSummaryTable" />
-          </div>
-          <div className="panel" style={{ marginBottom: 0 }}>
-            <div className="panel-hd">
-              <div>
-                <div className="panel-title">본사 · 법인 비교</div>
-                <div className="panel-sub">백만원</div>
-              </div>
-              <div className="legend" id="hqLegend" />
-            </div>
-            <div className="chart-wrap">
-              <canvas id="hqChart" />
-            </div>
-          </div>
-        </div>
-
         <div className="section-lead">
           보고용 부문별 상세<span className="sub">본사(사업/개발/SCM/Media/Staff) · 법인(해외법인별)</span>
         </div>
@@ -404,38 +379,6 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           </div>
         </div>
 
-        <div className="panel" style={{ marginBottom: 16 }}>
-          <div className="panel-hd">
-            <div>
-              <div className="panel-title">국내/해외 비중 (월별 예산 vs 실적)</div>
-              <div className="panel-sub" id="evcsShareSub">
-                &nbsp;
-              </div>
-            </div>
-            <div className="legend">
-              <span className="leg">
-                <span className="leg-dot" style={{ background: "rgba(8,145,178,0.35)" }} />
-                예산-국내
-              </span>
-              <span className="leg">
-                <span className="leg-dot" style={{ background: "rgba(15,23,42,0.3)" }} />
-                예산-해외
-              </span>
-              <span className="leg">
-                <span className="leg-dot" style={{ background: "#0891b2" }} />
-                실적-국내
-              </span>
-              <span className="leg">
-                <span className="leg-dot" style={{ background: "#0f172a" }} />
-                실적-해외
-              </span>
-            </div>
-          </div>
-          <div className="chart-wrap-lg">
-            <canvas id="evcsShareChart" />
-          </div>
-        </div>
-
         <div className="tbl-box">
           <div className="tbl-hd">
             구분별 상세 <span className="sub">EVCS 배부 금액(국내+해외) 기준</span>
@@ -466,8 +409,6 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         <div className="section-lead">
           대계정 '인증대행료' 상세 관리<span className="sub">EVCS에 배부된 인증대행료 · 예산 대비 초과 집행 위험 모니터링</span>
         </div>
-        <div className="kpi-row" id="certKpis" />
-        <div id="certAlert" />
         <div className="panel" style={{ marginBottom: 16 }}>
           <div className="panel-hd">
             <div>
@@ -491,8 +432,11 @@ export default function Dashboard({ data }: { data: DashboardData }) {
               </span>
             </div>
           </div>
-          <div className="chart-wrap-lg">
-            <canvas id="certComboChart" />
+          <div className="cert-row">
+            <div className="cert-chart">
+              <canvas id="certComboChart" />
+            </div>
+            <div className="cert-side" id="certSide" />
           </div>
         </div>
       </div>

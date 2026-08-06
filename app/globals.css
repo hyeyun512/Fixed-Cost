@@ -182,25 +182,31 @@ body{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif;b
 .donut-legend{list-style:none;margin:0;padding:0;flex:none}
 .donut-legend li{display:flex;align-items:center;gap:8px;font-size:12px;color:#374151;padding:2.5px 0;white-space:nowrap}
 .dleg-dot{width:9px;height:9px;border-radius:2px;flex:none}
+.dleg-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.dleg-pct{font-variant-numeric:tabular-nums;font-weight:600;color:#1e3a8a;margin-left:8px}
 
-/* ---- EVCS: 배부 현황 표 + 국내/해외 추이 차트를 한 줄에 (아래선이 맞도록 같은 높이로 늘린다) ---- */
-.evcs-top{display:grid;grid-template-columns:auto minmax(320px,1fr);gap:16px;align-items:stretch;margin-bottom:4px}
-.evcs-top-left{display:flex;flex-direction:column}
+/* ---- EVCS 상단: [배부 현황 표] + [구분별 금액 규모 도넛 2개] — 윗선·아랫선을 같은 선상에 맞춘다 ---- */
+.evcs-top{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:stretch;margin-bottom:4px}
+.evcs-top-left,.evcs-top-right{display:flex;flex-direction:column;min-width:0}
 .evcs-top-left .tbl-box{flex:1}
-.evcs-trend-panel{padding:14px 16px;display:flex;flex-direction:column}
-.evcs-trend-wrap{position:relative;flex:1;min-height:150px}
+.donut-pair{display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:1}
+.donut-card{flex-direction:column;align-items:stretch;gap:8px;min-width:0}
+.donut-card-title{font-size:13px;font-weight:700;color:#1a202c}
+.donut-card-body{display:flex;align-items:center;gap:14px;flex:1;min-width:0}
 
-/* ---- EVCS: 구분별 금액 규모 (월별 구성 막대 + 누계/연간예산 막대) ---- */
-.evcs-cat-row{background:#fff;border:0.5px solid #e2e8f0;border-radius:12px;padding:12px 16px;margin-bottom:12px}
-.evcs-cat-hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}
-.evcs-cat-name{font-size:13px;font-weight:700;color:#1a202c}
-.evcs-cat-hd .legend{margin-top:0;gap:10px}
-.evcs-cat-hd .leg{font-size:11px}
-.evcs-cat-rate{margin-left:auto;font-size:11.5px;color:#64748b;display:flex;align-items:center;gap:6px;white-space:nowrap}
-.evcs-cat-rate .kbadge{margin-top:0}
-.evcs-cat-charts{display:grid;grid-template-columns:1fr 250px;gap:14px}
-.evcs-cat-chart{position:relative;height:158px}
-.evcs-cat-chart-cum{border-left:0.5px solid #e2e8f0;padding-left:14px}
+/* ---- Appendix B: 인증대행료 차트 + 우측 누계 요약 ---- */
+.cert-row{display:grid;grid-template-columns:1fr 180px;gap:18px;align-items:stretch}
+.cert-chart{position:relative;height:210px}
+.cert-side{display:flex;flex-direction:column;justify-content:center;gap:14px;padding-left:18px;border-left:0.5px solid #e2e8f0}
+.cert-label{font-size:11px;color:#94a3b8;font-weight:600;letter-spacing:.4px;margin-bottom:3px}
+.cert-value{font-size:19px;font-weight:700;color:#1a202c;font-variant-numeric:tabular-nums}
+.cert-value .kbadge{margin-top:0;font-size:14px;padding:4px 12px}
+.cert-note{font-size:11px;color:#94a3b8;margin-top:2px}
+
+/* ---- EVCS 하단: 국내/해외 월별 실적 추이 (가로 전체) ---- */
+.evcs-trend-panel{padding:12px 16px;display:flex;flex-direction:column}
+.evcs-trend-hd{margin-bottom:6px;justify-content:flex-end}
+.evcs-trend-wrap{position:relative;flex:1;min-height:150px}
 
 footer{text-align:center;padding:22px;color:#94a3b8;font-size:11.5px}
 
@@ -235,18 +241,47 @@ footer{text-align:center;padding:22px;color:#94a3b8;font-size:11.5px}
   .sum-block{margin-bottom:12px}
   .sum-block-row{margin-bottom:8px;gap:12px}
   .evcs-top{gap:10px}
-  .evcs-trend-panel{padding:8px 10px}
+  .evcs-trend-panel{padding:8px 12px}
   /* 인쇄에서는 차트 높이를 고정한다. flex:1로 두면 화면에서 그려진 canvas 높이가 그대로 남아
-     오른쪽 칸이 필요 이상으로 커진다 (표가 있는 왼쪽 칸이 행 높이를 정하도록 둔다). */
-  .evcs-trend-wrap{flex:none;height:96px;min-height:0}
-  .evcs-trend-panel .panel-hd{margin-bottom:4px!important}
-  /* 위 .tbl-box 일괄 margin이 !important라 표·차트 아래선이 어긋난다 — 이 표만 여백 0으로 되돌린다. */
+     칸이 필요 이상으로 커진다. */
+  .evcs-trend-wrap{flex:none;height:150px;min-height:0}
+  .evcs-trend-hd{margin-bottom:2px!important}
+  /* 위 .tbl-box 일괄 margin이 !important라 표·도넛 아래선이 어긋난다 — 이 표만 여백 0으로 되돌린다. */
   .evcs-top-left .tbl-box{margin-bottom:0!important}
   #tab-sum-evcs .tbl-hd{padding:5px 12px}
-  .evcs-cat-row{padding:8px 12px;margin-bottom:8px}
-  .evcs-cat-hd{margin-bottom:5px;gap:10px}
-  .evcs-cat-chart{height:92px}
-  .evcs-cat-charts{gap:10px;grid-template-columns:1fr 215px}
+  .donut-pair{gap:10px}
+  .donut-card{padding:6px 10px;gap:4px}
+  .donut-card-body{gap:8px}
+  .donut-card .donut-wrap{width:104px;height:104px}
+  .cert-chart{height:150px}
+  .cert-row{grid-template-columns:1fr 150px;gap:12px}
+  .cert-value{font-size:15px}
+
+  /* Appendix A는 표 행이 많아, 가로 한 페이지에 들어가도록 카드·차트·표를 한 단계 더 줄인다. */
+  #tab-summary .callout{padding:7px 12px;font-size:11px;margin-bottom:8px}
+  #tab-summary .kpi-row{margin-bottom:8px}
+  #tab-summary .kcard{padding:7px 14px}
+  #tab-summary .klabel{font-size:9.5px;margin-bottom:1px}
+  #tab-summary .kval{font-size:16px}
+  #tab-summary .ksub{font-size:9.5px;margin-top:1px}
+  #tab-summary .chart-2eq{gap:10px;margin-bottom:8px}
+  #tab-summary .panel{padding:10px 12px}
+  #tab-summary .panel-hd{margin-bottom:5px}
+  #tab-summary .panel-title{font-size:12px}
+  #tab-summary .panel-sub{font-size:10px}
+  #tab-summary .chart-wrap-lg{height:94px}
+  #tab-summary .section-lead{margin:7px 0 3px}
+  #tab-summary .sheet-hd{margin-bottom:6px;padding-bottom:4px}
+  #tab-summary .sheet-title{font-size:15px}
+  #tab-summary .pl-tbl th{padding:2px 7px!important;font-size:8px!important}
+  #tab-summary .pl-tbl td{padding:1px 7px!important;font-size:9px!important}
+  /* 비고가 여러 줄로 늘어나면 표가 한 페이지를 넘긴다 — 인쇄에서는 한 줄로 줄이고 넘치면 …로 자른다
+     (화면에서는 전체 문장을 그대로 볼 수 있다). */
+  #tab-summary .pl-tbl .remark-cell{font-size:8px;line-height:1.2}
+  #tab-summary .remark-clip{display:block;max-width:330px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #tab-summary .hq-chip{font-size:8px;padding:0 4px;margin-right:4px}
+  /* 집행률 배지가 셀 안에서 가장 큰 요소라 행 높이를 결정한다 — 배지도 함께 줄여야 표가 실제로 작아진다. */
+  #tab-summary .pl-tbl .kbadge{font-size:8px;padding:1px 5px}
   .summary-mom-title{margin:10px 0 6px;padding-top:8px}
   .summary-callout{padding:8px 12px!important;margin-bottom:6px!important}
   .summary-comment-list{font-size:11.5px;line-height:1.4}

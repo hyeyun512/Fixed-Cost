@@ -70,6 +70,13 @@ export function initDashboard(data: DashboardData): () => void {
   function rateBadgeCell(rate: number | null): string {
     return `<span class="kbadge ${badgeClass(rate)}">${badgeLabel(rate)}</span>`;
   }
+  /** KPI 카드의 집행률 숫자 자체에 색을 입힌다 (배지를 따로 달면 같은 값이 두 번 보인다). */
+  function rateTextClass(rate: number | null): string {
+    if (rate === null) return "";
+    if (rate === Infinity || rate > 100) return "neg";
+    if (rate < 100) return "pos";
+    return "";
+  }
   /** 비고에 "유의미한 차이"로 볼 최소 금액. 본사/법인 모두 동일 기준 적용. */
   const REMARK_MIN_DIFF_WON = 30_000_000;
   /**
@@ -436,7 +443,10 @@ export function initDashboard(data: DashboardData): () => void {
     actual: (number | null)[],
     budget: number[],
     barColor = C_ACTUAL,
-    extraPlugins: any[] = []
+    extraPlugins: any[] = [],
+    /** 집행률 축 고정 범위. 값이 100% 부근에 모이는 월별 추이용 기본값이며,
+     *  인증대행료처럼 편차가 큰 차트는 null로 넘겨 자동 범위를 쓴다. */
+    rateRange: { min: number; max: number } | null = { min: 50, max: 150 }
   ): AnyChart {
     const canvas = el(canvasId) as HTMLCanvasElement;
     const rates = labels.map((_, i) => {
@@ -486,6 +496,8 @@ export function initDashboard(data: DashboardData): () => void {
           y: { position: "left", ticks: { callback: (v: any) => fmtM(v as number) }, grid: { color: "#f1f5f9" } },
           y1: {
             position: "right",
+            // 집행률 축은 기본 50~150%로 고정 — 자동 범위면 눈금 폭이 좁아 100% 기준선에서의 편차가 잘 안 보인다.
+            ...(rateRange ? { min: rateRange.min, max: rateRange.max } : {}),
             grid: { drawOnChartArea: false },
             ticks: { callback: (v: any) => Math.round(v as number) + "%" },
           },
@@ -527,28 +539,50 @@ export function initDashboard(data: DashboardData): () => void {
   const ALLOC_BLUES = ["#1e3a8a", "#1d4ed8", "#3b82f6", "#60a5fa", "#93c5fd", "#94a3b8"];
 
   /**
-   * Summary① 도넛 — 가운데에 합계, 각 조각 위에 비중(%)을 직접 그려서 비율과 숫자를 함께 읽히게 한다.
-   * (비중이 너무 작은 조각은 글자가 겹치므로 생략하고, 우측 범례에서 금액으로 확인한다.)
+   * 반올림해도 합이 정확히 100%가 되도록 비중을 계산한다 (최대잔여법).
+   * 단순 반올림만 하면 표시된 비중의 합이 99%나 101%가 되어 보고서에서 어색해진다.
+   */
+  function pctTo100(values: number[]): number[] {
+    const total = values.reduce((a, b) => a + b, 0);
+    if (!total) return values.map(() => 0);
+    const raw = values.map((v) => (v / total) * 100);
+    const floor = raw.map((r) => Math.floor(r));
+    let rest = 100 - floor.reduce((a, b) => a + b, 0);
+    const order = raw
+      .map((r, i) => ({ i, frac: r - Math.floor(r) }))
+      .sort((a, b) => b.frac - a.frac);
+    const out = [...floor];
+    for (const o of order) {
+      if (rest <= 0) break;
+      out[o.i] += 1;
+      rest -= 1;
+    }
+    return out;
+  }
+
+  /**
+   * Summary 도넛 — 가운데에 합계, 각 조각 위에 비중(%)을 직접 그려서 비율과 숫자를 함께 읽히게 한다.
+   * (비중이 너무 작은 조각은 글자가 겹치므로 생략하고, 툴팁에서 금액·비중을 확인한다.)
    */
   function allocDonut(canvasId: string, labels: string[], values: number[]): AnyChart {
     const canvas = el(canvasId) as HTMLCanvasElement;
     const total = values.reduce((a, b) => a + b, 0) || 1;
+    const pcts = pctTo100(values);
     const centerAndPct = {
       id: "centerAndPct",
       afterDatasetsDraw(chart: any) {
         const { ctx } = chart;
         ctx.save();
-        // 조각별 비중(%) — 5% 이상만 표기
+        // 조각별 비중(%) — 글자가 들어갈 만큼 두꺼운 조각(4% 이상)에만 표기. 합은 항상 100%가 되도록 계산돼 있다.
         const meta = chart.getDatasetMeta(0);
         meta.data.forEach((arc: any, i: number) => {
-          const pct = (values[i] / total) * 100;
-          if (pct < 5) return;
+          if (pcts[i] < 4) return;
           const { x, y } = arc.tooltipPosition();
           ctx.fillStyle = "#fff";
           ctx.font = "700 11px Pretendard, sans-serif";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
-          ctx.fillText(`${Math.round(pct)}%`, x, y);
+          ctx.fillText(`${pcts[i]}%`, x, y);
         });
         // 가운데 합계
         const cx = (chart.chartArea.left + chart.chartArea.right) / 2;
@@ -588,10 +622,19 @@ export function initDashboard(data: DashboardData): () => void {
     return new Chart(canvas, config);
   }
 
-  /** 도넛 범례 — 금액·비중은 왼쪽 표와 도넛에 이미 있으므로 항목명만 보여준다. */
-  function donutLegendHtml(labels: string[]): string {
+  /**
+   * 도넛 범례. 기본은 항목명만 (옆에 금액 표가 따로 있는 Summary① 용도).
+   * values를 주면 비중(%)까지 함께 보여준다 — 조각이 얇아 도넛 위에 못 그린 항목도 비중을 알 수 있고,
+   * 표시된 비중의 합이 정확히 100%가 된다.
+   */
+  function donutLegendHtml(labels: string[], values?: number[]): string {
+    const pcts = values ? pctTo100(values) : null;
     return labels
-      .map((l, i) => `<li><span class="dleg-dot" style="background:${ALLOC_BLUES[i % ALLOC_BLUES.length]}"></span><span class="dleg-name">${l}</span></li>`)
+      .map(
+        (l, i) =>
+          `<li><span class="dleg-dot" style="background:${ALLOC_BLUES[i % ALLOC_BLUES.length]}"></span>` +
+          `<span class="dleg-name">${l}</span>${pcts ? `<span class="dleg-pct">${pcts[i]}%</span>` : ""}</li>`
+      )
       .join("");
   }
 
@@ -652,7 +695,8 @@ export function initDashboard(data: DashboardData): () => void {
     const diff = actual - budget;
     const rate = rateOf(actual, budget);
     const nameCell = hqChip ? `<span class="hq-chip ${CHIP_CLASS[hqChip] || "corp"}">${hqChip}</span>${label}` : label;
-    const remarkCell = remark === undefined ? "" : `<td class="remark-cell">${remark}</td>`;
+    // 비고는 span으로 한 번 감싼다 — td에는 max-width/줄 제한이 잘 먹지 않아, 인쇄에서 줄 수를 줄일 때 필요하다.
+    const remarkCell = remark === undefined ? "" : `<td class="remark-cell"><span class="remark-clip">${remark}</span></td>`;
     return `<tr class="${rowClass}"><td>${nameCell}</td>
       <td${cls(budget)}>${fmtM(budget)}</td><td${cls(actual)}>${fmtM(actual)}</td>
       <td${diffCls(diff)}>${diff >= 0 ? "+" : ""}${fmtM(diff)}</td>
@@ -754,8 +798,9 @@ export function initDashboard(data: DashboardData): () => void {
         </div>
         <div class="kcombo-div"></div>
         <div class="kcombo-item">
-          <div class="klabel">집행률</div><div class="kval">${rate === null ? "-" : rate === Infinity ? "∞" : Math.round(rate) + "%"}</div>
-          <span class="kbadge ${badgeClass(rate)}">${badgeLabel(rate)}</span>
+          <div class="klabel">집행률</div>
+          <div class="kval ${rateTextClass(rate)}">${rate === null ? "-" : rate === Infinity ? "∞" : Math.round(rate) + "%"}</div>
+          <div class="ksub">${scopeLabel()} 예산 대비</div>
         </div>
       </div>`
     );
@@ -794,24 +839,7 @@ export function initDashboard(data: DashboardData): () => void {
       )
     );
 
-    setHtml(
-      "hqSummaryTable",
-      table5(
-        row("본사", s.hq_totals["본사"].actual, s.hq_totals["본사"].budget, "", "본사") +
-          row("법인", s.hq_totals["법인"].actual, s.hq_totals["법인"].budget, "", "법인") +
-          row("본사+법인 합계", s.total.actual, s.total.budget, "tot")
-      )
-    );
-    setHtml("hqLegend", legendHtml([[C_BUDGET, "예산"], [C_ACTUAL, "실적"]]));
-    queueChart("summary", "hqChart", () =>
-      barChart(
-        "hqChart",
-        ["본사", "법인"],
-        [s.hq_totals["본사"].actual, s.hq_totals["법인"].actual],
-        [s.hq_totals["본사"].budget, s.hq_totals["법인"].budget]
-      )
-    );
-
+    // 본사·법인 요약 표와 비교 막대는 아래 "보고용 부문별 상세"에 소계로 이미 들어 있어 제거했다.
     const deptOrder: Record<string, number> = { 본사: 0, 법인: 1 };
     const rows = [...s.rows].sort(
       (a, b) => (deptOrder[a.hq_corp] ?? 9) - (deptOrder[b.hq_corp] ?? 9) || a.dept.localeCompare(b.dept, "ko")
@@ -944,8 +972,9 @@ export function initDashboard(data: DashboardData): () => void {
         </div>
         <div class="kcombo-div"></div>
         <div class="kcombo-item">
-          <div class="klabel">집행률</div><div class="kval">${evcsRate === null ? "-" : evcsRate === Infinity ? "∞" : Math.round(evcsRate) + "%"}</div>
-          <span class="kbadge ${badgeClass(evcsRate)}">${badgeLabel(evcsRate)}</span>
+          <div class="klabel">집행률</div>
+          <div class="kval ${rateTextClass(evcsRate)}">${evcsRate === null ? "-" : evcsRate === Infinity ? "∞" : Math.round(evcsRate) + "%"}</div>
+          <div class="ksub">${scopeLabel()} 예산 대비</div>
         </div>
       </div>`
     );
@@ -974,18 +1003,6 @@ export function initDashboard(data: DashboardData): () => void {
       )
     );
 
-    // 신규: 국내/해외 비중 월별 예산·실적 (해외에 얼마나 투자되고 있는지 한눈에 보기 위한 간략 시각화).
-    setText("evcsShareSub", `1월~${lastMonth} 예산 vs 실적, 국내/해외 구성비`);
-    queueChart("evcs", "evcsShareChart", () =>
-      shareChart(
-        "evcsShareChart",
-        months,
-        trend.evcs_domestic.map((x) => x.budget),
-        trend.evcs_overseas.map((x) => x.budget),
-        trend.evcs_domestic.map((x) => x.actual),
-        trend.evcs_overseas.map((x) => x.actual)
-      )
-    );
 
     // 구분별 상세: 계정별 탭과 같은 병렬 배치로, EVCS 배부 금액(국내+해외) 기준 총합계/국내/해외를 나란히 보여준다.
     setHtml(
@@ -1015,52 +1032,17 @@ export function initDashboard(data: DashboardData): () => void {
     setText("evcsCorpMainAccountTblSub", scopeLabel() + " · 백만원");
     setHtml("evcsCorpMainAccountTable", mainAccountTable(e.mainAccountByHq["법인"]));
 
-    const cd = e.certAgency.domestic,
-      co = e.certAgency.overseas;
-    const cdRate = rateOf(cd.actual, cd.budget),
-      coRate = rateOf(co.actual, co.budget);
-    const certTotA = cd.actual + co.actual,
-      certTotB = cd.budget + co.budget;
-    const certRate = rateOf(certTotA, certTotB);
-
-    // 인증대행료 섹션 상단에 예산·실적 총액을 먼저 보여준 뒤, 아래 콤보 차트에서 월별 추이를 확인하게 한다.
+    // 인증대행료 — 상단 카드/코멘트 대신, 차트 우측에 누계 예산·실적·집행률만 간결하게 붙인다.
+    const certCum = data.byMonth[currentMonth].cumulative.evcs.certAgency;
+    const certCumA = certCum.domestic.actual + certCum.overseas.actual;
+    const certCumB = certCum.domestic.budget + certCum.overseas.budget;
     setHtml(
-      "certKpis",
-      `<div class="kcard kcard-combo"><div class="kcard-bar" style="background:${C_ALT}"></div>
-        <div class="kcombo-item">
-          <div class="klabel">인증대행료 실적</div><div class="kval">${fmtM(certTotA)}<span class="kunit"> 백만원</span></div>
-          <div class="ksub">${scopeLabel()}</div>
-        </div>
-        <div class="kcombo-div"></div>
-        <div class="kcombo-item">
-          <div class="klabel">예산</div><div class="kval">${fmtM(certTotB)}<span class="kunit"> 백만원</span></div>
-          <div class="ksub">${scopeLabel()}</div>
-        </div>
-        <div class="kcombo-div"></div>
-        <div class="kcombo-item">
-          <div class="klabel">집행률</div><div class="kval">${certRate === null ? "-" : certRate === Infinity ? "∞" : Math.round(certRate) + "%"}</div>
-          <span class="kbadge ${badgeClass(certRate)}">${badgeLabel(certRate)}</span>
-        </div>
-      </div>`
+      "certSide",
+      `<div class="cert-metric"><div class="cert-label">누계 예산</div><div class="cert-value">${fmtM(certCumB)}<span class="kunit"> 백만원</span></div></div>` +
+        `<div class="cert-metric"><div class="cert-label">누계 실적</div><div class="cert-value">${fmtM(certCumA)}<span class="kunit"> 백만원</span></div></div>` +
+        `<div class="cert-metric"><div class="cert-label">누계 집행률</div><div class="cert-value">${rateBadgeCell(rateOf(certCumA, certCumB))}</div></div>` +
+        `<div class="cert-note">${data.byMonth[currentMonth].cumulative.label} 기준</div>`
     );
-
-    const riskyDom = cdRate !== null && (cdRate === Infinity || cdRate > 130);
-    const riskyOvs = coRate !== null && (coRate === Infinity || coRate > 130);
-    if (riskyDom || riskyOvs) {
-      const parts: string[] = [];
-      if (riskyDom) parts.push(`국내 ${badgeLabel(cdRate)}`);
-      if (riskyOvs) parts.push(`해외 ${badgeLabel(coRate)}`);
-      setHtml(
-        "certAlert",
-        `<div class="callout alert"><div class="ic">⚠️</div>
-          <div><b>인증대행료 초과 집행 위험</b> — ${scopeLabel()} 기준 ${parts.join(", ")}로 예산을 크게 초과했습니다. 잔여 예산 및 연간 계획 재검토가 필요합니다.</div></div>`
-      );
-    } else {
-      setHtml(
-        "certAlert",
-        `<div class="callout info"><div class="ic">✅</div><div>${scopeLabel()} 기준 인증대행료는 예산 범위 내에서 관리되고 있습니다 (합계 집행률 ${badgeLabel(certRate)}).</div></div>`
-      );
-    }
 
     // 인증대행료 월별 예산·실적·집행률 콤보 차트 (국내+해외 합산, 12월까지 예산 확장 + 미경과 기간 음영)
     setText(
@@ -1074,7 +1056,7 @@ export function initDashboard(data: DashboardData): () => void {
       return d == null || o == null ? null : d + o;
     });
     queueChart("evcs", "certComboChart", () =>
-      comboChart("certComboChart", allMonths, certComboActualFull, certComboBudgetFull, C_ALT, [futureShadePlugin(lastActualIdx)])
+      comboChart("certComboChart", allMonths, certComboActualFull, certComboBudgetFull, C_ALT, [futureShadePlugin(lastActualIdx)], null)
     );
   }
 
@@ -1376,9 +1358,9 @@ export function initDashboard(data: DashboardData): () => void {
     queueChart("sum-total", "sumTotalCumDonut", () => allocDonut("sumTotalCumDonut", ALLOC_DONUT_LABELS, cumVals));
   }
 
-  /** 비중이 작아 개별로 볼 필요가 없는 법인 — 한 행으로 묶어 표 맨 아래에 보여준다. */
+  /** 비중이 작아 개별로 볼 필요가 없는 법인 — '기타' 한 행으로 묶고, 어떤 법인인지는 표 아래 각주로 밝힌다. */
   const MINOR_CORPS = ["HTR", "HDG", "HAU"];
-  const MINOR_CORP_LABEL = MINOR_CORPS.join("/");
+  const MINOR_CORP_LABEL = "기타";
   function mergeAllocRows(rows: AllocationRow[]): AllocValues13 & { humaxTotal: number } {
     const merged: AllocValues13 & { humaxTotal: number } = {
       stb: 0, mobility: 0, evcsDomestic: 0, evcsOverseas: 0, humaxCommon: 0, building: 0,
@@ -1475,6 +1457,11 @@ export function initDashboard(data: DashboardData): () => void {
       ])
     );
 
+    // '기타'로 묶은 법인이 무엇인지 표 아래 각주로 밝힌다.
+    const hasMinor = corpCompanyRows(board).some((r) => MINOR_CORPS.includes(r.label));
+    // 본사 구분에도 '기타'가 있으므로 "법인의 기타"로 명확히 적는다.
+    setText("sumDetailNote", hasMinor ? `* 법인의 ${MINOR_CORP_LABEL} = ${MINOR_CORPS.join(", ")} (비중이 작아 합산 표기)` : "");
+
     // 전월 대비 급증/급감 행은 Summary 박스 하단에 자동으로 덧붙인다 (매월 값이 달라지므로 고정 문구로 둘 수 없다).
     const momIdx = months.indexOf(currentMonth);
     setText("sumDetailMomTitle", momIdx >= 1 ? `전월(${months[momIdx - 1]}) 대비 확인 필요` : "");
@@ -1534,105 +1521,13 @@ export function initDashboard(data: DashboardData): () => void {
     );
   }
 
-  // ---- 구분별 금액 규모: 누적 막대 그래프 (기존 표를 대체) ----
-  // 구분 순서는 표와 동일하게 categoryByHq의 순서를 그대로 쓴다.
-  const EVCS_CAT_TEXT = ["#fff", "#fff", "#fff", "#1e293b", "#1e293b", "#1e293b"];
-
-  /** 막대 조각 위에 "금액·비중%"을 그린다. 조각이 얇으면 글자가 겹치므로 생략하고 툴팁으로 확인한다. */
-  function stackLabelPlugin(totals: number[]) {
-    return {
-      id: "stackLabels",
-      afterDatasetsDraw(chart: any) {
-        const { ctx } = chart;
-        ctx.save();
-        ctx.font = "600 9px Pretendard, sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        chart.data.datasets.forEach((ds: any, di: number) => {
-          const meta = chart.getDatasetMeta(di);
-          meta.data.forEach((bar: any, i: number) => {
-            const v = ds.data[i] as number;
-            if (!v) return;
-            const h = Math.abs(bar.base - bar.y);
-            if (h < 12) return; // 글자가 들어갈 높이가 안 되는 조각은 생략
-            const pct = totals[i] ? Math.round((v / totals[i]) * 100) : 0;
-            ctx.fillStyle = EVCS_CAT_TEXT[di % EVCS_CAT_TEXT.length];
-            ctx.fillText(`${fmtM(v)}·${pct}%`, bar.x, (bar.base + bar.y) / 2);
-          });
-        });
-        ctx.restore();
-      },
-    };
-  }
-
-  function stackedBarChart(canvasId: string, labels: string[], cats: string[], series: number[][]): AnyChart {
-    const canvas = el(canvasId) as HTMLCanvasElement;
-    const totals = labels.map((_, i) => series.reduce((s, arr) => s + arr[i], 0));
-    const datasets = cats.map((c, ci) => ({
-      label: c,
-      data: series[ci],
-      backgroundColor: ALLOC_BLUES[ci % ALLOC_BLUES.length],
-      borderWidth: 0,
-    }));
-    const config: any = {
-      type: "bar",
-      plugins: [stackLabelPlugin(totals)],
-      data: { labels, datasets },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        layout: { padding: { top: 6 } },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: (ctx: any) => {
-                const v = ctx.parsed.y as number;
-                const t = totals[ctx.dataIndex] || 1;
-                return `${ctx.dataset.label}: ${fmtM(v)}백만원 (${Math.round((v / t) * 100)}%)`;
-              },
-              footer: (items: any[]) => `합계: ${fmtM(totals[items[0].dataIndex])}백만원`,
-            },
-          },
-        },
-        scales: {
-          x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 } } },
-          // 일부 구분에 소액 마이너스(환입)가 있어도 축이 음수로 내려가지 않게 0에서 시작한다.
-          y: { stacked: true, min: 0, ticks: { callback: (v: any) => fmtM(v as number), font: { size: 10 } }, grid: { color: "#f1f5f9" } },
-        },
-      },
-    };
-    return new Chart(canvas, config);
-  }
-
-  /** 월별(1월~선택월) 구분 구성 누적 막대. */
-  function evcsCatMonthlyChart(canvasId: string, hq: "본사" | "법인"): AnyChart {
-    const idx = months.indexOf(currentMonth);
-    const elapsed = months.slice(0, idx + 1);
-    const cats = data.byMonth[currentMonth].evcs.categoryByHq[hq].map((c) => c.category);
-    const series = cats.map((c) =>
-      elapsed.map((m) => data.byMonth[m].evcs.categoryByHq[hq].find((x) => x.category === c)?.actual || 0)
-    );
-    return stackedBarChart(canvasId, elapsed, cats, series);
-  }
-
-  /** 누계 실적 vs 연간 예산 누적 막대 (같은 구분 색상 체계). */
-  function evcsCatCumChart(canvasId: string, hq: "본사" | "법인"): AnyChart {
-    const cumRows = data.byMonth[currentMonth].cumulative.evcs.categoryByHq[hq];
-    const annual = evcsAnnual[hq].byCategory;
-    const cats = cumRows.map((c) => c.category);
-    const series = cats.map((c) => [
-      cumRows.find((x) => x.category === c)?.actual || 0,
-      annual.find((x) => x.category === c)?.budget || 0,
-    ]);
-    return stackedBarChart(canvasId, ["누계 실적", "연간 예산"], cats, series);
-  }
-
-  /** 구분 색상 범례 (막대 그래프 공용). */
-  function evcsCatLegendHtml(hq: "본사" | "법인"): string {
-    return data.byMonth[currentMonth].evcs.categoryByHq[hq]
-      .map((c, i) => `<span class="leg"><span class="leg-dot" style="background:${ALLOC_BLUES[i % ALLOC_BLUES.length]}"></span>${c.category}</span>`)
-      .join("");
+  /** 구분별 금액 규모 도넛 — 누계 실적 기준, 본사/법인 각각 (Summary①의 도넛과 동일한 형태). */
+  function renderEvcsCatDonut(hq: "본사" | "법인", key: "Hq" | "Corp") {
+    const rows = data.byMonth[currentMonth].cumulative.evcs.categoryByHq[hq];
+    const labels = rows.map((r) => r.category);
+    const values = rows.map((r) => r.actual);
+    setHtml(`evcsDonut${key}Legend`, donutLegendHtml(labels, values));
+    queueChart("sum-evcs", `evcsDonut${key}`, () => allocDonut(`evcsDonut${key}`, labels, values));
   }
 
   /**
@@ -1670,20 +1565,10 @@ export function initDashboard(data: DashboardData): () => void {
     setText("evcsSplitSub", `EVCS 배부금액 · 백만원 · 누계 집행률 = 누계 실적 ÷ 연간 예산`);
     setHtml("evcsSplitTable", evcsSplitTableBody(monthE, cumE));
 
-    // 구분별 금액 규모 — 월별 구성 막대 + (누계 실적 vs 연간 예산) 막대, 본사/법인 각각.
-    setText("sumEvcsSub", `${months[0]}~${currentMonth} · 백만원 · 막대 안 표기는 "금액·구성비"`);
-    (["본사", "법인"] as const).forEach((hq) => {
-      const key = hq === "본사" ? "Hq" : "Corp";
-      const cumTot = cumE.categoryByHq[hq].reduce((s, c) => s + c.actual, 0);
-      const annualTot = evcsAnnual[hq].byCategory.reduce((s, c) => s + c.budget, 0);
-      setHtml(`evcsCat${key}Legend`, evcsCatLegendHtml(hq));
-      setHtml(
-        `evcsCat${key}Rate`,
-        `연간 예산 대비 누계 집행률 ${rateBadgeCell(rateOf(cumTot, annualTot))}`
-      );
-      queueChart("sum-evcs", `evcsCat${key}Monthly`, () => evcsCatMonthlyChart(`evcsCat${key}Monthly`, hq));
-      queueChart("sum-evcs", `evcsCat${key}Cum`, () => evcsCatCumChart(`evcsCat${key}Cum`, hq));
-    });
+    // 구분별 금액 규모 — 누계 실적 기준 구성비 도넛, 본사/법인 각각.
+    setText("sumEvcsSub", `${data.byMonth[currentMonth].cumulative.label} 실적 기준 · 백만원`);
+    renderEvcsCatDonut("본사", "Hq");
+    renderEvcsCatDonut("법인", "Corp");
 
     setText("evcsTrendSub", `${months[0]}~${months[months.length - 1]} 실적 · 백만원 — ${evcsTrendNote()}`);
     queueChart("sum-evcs", "evcsTrendChart", evcsTrendChart);
