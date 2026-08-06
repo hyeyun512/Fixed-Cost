@@ -19,7 +19,7 @@ import type {
   AllocationBoard,
   AllocValues13,
   AllocAccountValues,
-  EvcsCategoryAnnualBudgetByHq,
+  HqCategoryAllocRow,
 } from "./types";
 
 const BUDGET_TABLE = "26년 예산(BP)";
@@ -497,6 +497,24 @@ export async function loadDashboardData(): Promise<DashboardData> {
     return { stb, mobility, evcsDomestic, evcsOverseas, humaxCommon, building, hMobility, hEv, hiparking, peoplecar, winercom, holdings, hNetworks };
   }
 
+  /** hq(본사/법인) 소속 실적행을 구분(category)별로 묶어 STB~건물 배부 내역을 집계 — Summary③ 구분별 상세용. */
+  function categoryAllocForHq(rows: Row[], hq: string): HqCategoryAllocRow[] {
+    const byCat = new Map<string, Row[]>();
+    for (const r of rows) {
+      if (!r.category || effectiveAllocHq(r) !== hq) continue;
+      const list = byCat.get(r.category);
+      if (list) list.push(r);
+      else byCat.set(r.category, [r]);
+    }
+    return catOrder
+      .filter((c) => byCat.has(c))
+      .map((c) => {
+        const v = sumAllocFields(byCat.get(c)!);
+        const humaxTotal = v.stb + v.mobility + v.evcsDomestic + v.evcsOverseas + v.humaxCommon;
+        return { category: c, ...v, humaxTotal };
+      });
+  }
+
   function allocationRow(label: string, level: 0 | 1 | 2, rows: Row[]): AllocationRow {
     const v = sumAllocFields(rows);
     const humaxTotal = v.stb + v.mobility + v.evcsDomestic + v.evcsOverseas + v.humaxCommon;
@@ -648,6 +666,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
       evcs: evcsForRows(actM, budM),
       mainAccountByHq: mainAccountByHqForRows(actM, budM),
       allocationBoard: allocationBoardForRows(actM, budM),
+      hqCategoryAlloc: categoryAllocForHq(actM, "본사"),
       cumulative: {
         summary: summaryForRows(actCum, budCum),
         category: categoryForRows(actCum, budCum),
@@ -657,6 +676,7 @@ export async function loadDashboardData(): Promise<DashboardData> {
         evcs: evcsForRows(actCum, budCum),
         mainAccountByHq: mainAccountByHqForRows(actCum, budCum),
         allocationBoard: allocationBoardForRows(actCum, budCum),
+        hqCategoryAlloc: categoryAllocForHq(actCum, "본사"),
         label: i === 0 ? `${months[0]} (누계=당월과 동일)` : `${months[0]}~${m} 누계`,
       },
     };
@@ -742,21 +762,6 @@ export async function loadDashboardData(): Promise<DashboardData> {
     return { cert_domestic_full, cert_overseas_full, fee_by_account_full };
   }
 
-  // EVCS 배부금액(국내+해외 합산) 기준 구분별 "연 예산" — 선택 월과 무관하게 예산 테이블 전체(1~12월)를 본사/법인으로 나눠 합산.
-  // Summary②(EVCS사업부) 구분별 상세 표의 "연 예산" 컬럼에서 사용한다.
-  function evcsCategoryAnnualBudgetForHq(hq: string) {
-    const bud = new Map<string, number>();
-    for (const r of budgetRowsFullYear) {
-      if (!r.category || effectiveAllocHq(r) !== hq) continue;
-      bud.set(r.category, (bud.get(r.category) || 0) + evcsKrwOf(r));
-    }
-    return catOrder.map((c) => ({ category: c, budget: bud.get(c) || 0 }));
-  }
-  const evcsCategoryAnnualBudgetByHq: EvcsCategoryAnnualBudgetByHq = {
-    본사: evcsCategoryAnnualBudgetForHq("본사"),
-    법인: evcsCategoryAnnualBudgetForHq("법인"),
-  };
-
   return {
     months,
     allMonths,
@@ -765,6 +770,5 @@ export async function loadDashboardData(): Promise<DashboardData> {
     sourceTable: actualTable,
     byMonth,
     trend,
-    evcsCategoryAnnualBudgetByHq,
   };
 }

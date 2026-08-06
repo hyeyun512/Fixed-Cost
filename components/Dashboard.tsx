@@ -1,39 +1,39 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { DashboardData, SummaryNotes } from "@/lib/types";
+import type { DashboardData } from "@/lib/types";
 import { initDashboard } from "@/lib/dashboardClient";
+import { SUMMARY_COMMENTS } from "@/lib/summaryComments";
 
-function SummaryNoteBox({ idPrefix }: { idPrefix: string }) {
+/** 경영진 보고용 고정 코멘트 — 화면에서 직접 고치지 않고, 텍스트를 받아 summaryComments.ts를 수정해 배포한다. */
+function SummaryCommentBox({ boxKey, accent }: { boxKey: keyof typeof SUMMARY_COMMENTS; accent: string }) {
   return (
-    <div className="panel summary-note-panel">
-      <div className="panel-hd">
-        <div>
-          <div className="panel-title">[Summary]</div>
-          <div className="panel-sub">담당자 코멘트 · 매월 직접 입력 · 저장 버튼을 눌러야 반영됩니다</div>
-        </div>
+    <div className="summary-callout" style={{ borderLeftColor: accent }}>
+      <div className="summary-callout-title" style={{ color: accent }}>
+        Summary
       </div>
-      <textarea className="summary-note" id={`${idPrefix}Note`} rows={9} placeholder="이번 달 주요 코멘트를 입력하세요" />
-      <div className="summary-note-actions">
-        <span className="summary-note-status" id={`${idPrefix}NoteStatus`} />
-        <button type="button" className="summary-note-save" id={`${idPrefix}NoteSave`}>
-          저장
-        </button>
-      </div>
+      <ul className="summary-comment-list">
+        {SUMMARY_COMMENTS[boxKey].map((line, i) => (
+          <li key={i}>
+            <span className="summary-comment-dot" style={{ background: accent }} />
+            {line}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
-export default function Dashboard({ data, notes }: { data: DashboardData; notes: SummaryNotes }) {
+export default function Dashboard({ data }: { data: DashboardData }) {
   const mounted = useRef(false);
 
   useEffect(() => {
     // React StrictMode in dev runs effects twice; guard so we don't double-init.
-    const cleanup = initDashboard(data, notes);
+    const cleanup = initDashboard(data);
     mounted.current = true;
     return cleanup;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, notes]);
+  }, [data]);
 
   return (
     <>
@@ -107,72 +107,85 @@ export default function Dashboard({ data, notes }: { data: DashboardData; notes:
           </div>
         </div>
         <div className="summary-split">
-          <div className="tbl-box" style={{ marginBottom: 0 }}>
-            <div className="tbl-hd">
-              Company별 합계 <span className="sub" id="sumTotalSub" />
-            </div>
-            <div className="tbl-scroll">
-              <div id="sumTotalTable" />
-            </div>
+          <div className="kpi-row-3" id="sumTotalHero" />
+          <SummaryCommentBox boxKey="humax_total" accent="#1d4ed8" />
+        </div>
+
+        <div className="section-lead">상세</div>
+        <div className="tbl-box" style={{ marginBottom: 16 }}>
+          <div className="tbl-hd">
+            당월 <span className="sub" id="sumTotalMonthSub" />
           </div>
-          <SummaryNoteBox idPrefix="sumTotal" />
+          <div className="tbl-scroll">
+            <div id="sumTotalMonthTable" />
+          </div>
+        </div>
+        <div className="tbl-box" style={{ marginBottom: 0 }}>
+          <div className="tbl-hd">
+            당월 누계 <span className="sub" id="sumTotalCumSub" />
+          </div>
+          <div className="tbl-scroll">
+            <div id="sumTotalCumTable" />
+          </div>
         </div>
       </div>
 
       {/* ===================== SUMMARY② EVCS사업부 ===================== */}
       <div id="tab-sum-evcs" className="content">
         <div className="sheet-hd">
-          <div className="sheet-hd-bar" style={{ background: "#0891b2" }} />
+          <div className="sheet-hd-bar" style={{ background: "#1d4ed8" }} />
           <div>
             <div className="sheet-eyebrow">Summary ②</div>
             <div className="sheet-title">EVCS사업부</div>
           </div>
         </div>
         <div className="summary-split">
-          <div>
-            <div className="chart-2eq" style={{ marginBottom: 16 }}>
-              <div id="evcsSumMonthTable" />
-              <div id="evcsSumCumTable" />
-            </div>
-            <div className="section-lead">
-              구분별 상세<span className="sub" id="sumEvcsSub" />
-            </div>
-            <div className="tbl-box" style={{ marginBottom: 16 }}>
-              <div className="tbl-hd">본사</div>
-              <div className="tbl-scroll">
-                <div id="evcsCatTrendHqTable" />
-              </div>
-            </div>
-            <div className="tbl-box" style={{ marginBottom: 0 }}>
-              <div className="tbl-hd">법인</div>
-              <div className="tbl-scroll">
-                <div id="evcsCatTrendCorpTable" />
-              </div>
-            </div>
+          <div className="kpi-row-3" id="evcsHero" />
+          <SummaryCommentBox boxKey="evcs" accent="#1d4ed8" />
+        </div>
+
+        <div className="section-lead">
+          국내 · 해외 배부 현황 <span className="sub" id="evcsSplitSub" />
+        </div>
+        <div className="tbl-box" style={{ marginBottom: 16 }}>
+          <div id="evcsSplitTable" />
+        </div>
+        <div className="section-lead">
+          구분별 상세<span className="sub" id="sumEvcsSub" />
+        </div>
+        <div className="chart-2eq">
+          <div className="tbl-box" style={{ marginBottom: 0 }}>
+            <div className="tbl-hd">본사</div>
+            <div id="evcsCatHqTable" />
           </div>
-          <SummaryNoteBox idPrefix="sumEvcs" />
+          <div className="tbl-box" style={{ marginBottom: 0 }}>
+            <div className="tbl-hd">법인</div>
+            <div id="evcsCatCorpTable" />
+          </div>
         </div>
       </div>
 
       {/* ===================== SUMMARY③ Humax합계_상세 ===================== */}
       <div id="tab-sum-detail" className="content">
         <div className="sheet-hd">
-          <div className="sheet-hd-bar" style={{ background: "#7c3aed" }} />
+          <div className="sheet-hd-bar" style={{ background: "#1d4ed8" }} />
           <div>
             <div className="sheet-eyebrow">Summary ③</div>
             <div className="sheet-title">Humax합계_상세</div>
           </div>
         </div>
         <div className="summary-split">
-          <div className="tbl-box" style={{ marginBottom: 0 }}>
-            <div className="tbl-hd">
-              합계 · 본사(구분별) · 법인(소속사별) <span className="sub" id="sumDetailSub" />
-            </div>
-            <div className="tbl-scroll">
-              <div id="sumDetailTable" />
-            </div>
+          <div className="kpi-row-3" id="sumDetailHero" />
+          <SummaryCommentBox boxKey="humax_detail" accent="#1d4ed8" />
+        </div>
+
+        <div className="section-lead">
+          상세 <span className="sub" id="sumDetailSub" />
+        </div>
+        <div className="tbl-box" style={{ marginBottom: 0 }}>
+          <div className="tbl-scroll">
+            <div id="sumDetailTable" />
           </div>
-          <SummaryNoteBox idPrefix="sumDetail" />
         </div>
       </div>
 

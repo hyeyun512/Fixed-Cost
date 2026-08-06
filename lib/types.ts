@@ -85,6 +85,8 @@ export type AllocValues13 = {
   holdings: number;
   hNetworks: number;
 };
+/** 구분(category) 하나의 STB~건물 배부 내역 + (A)Humax 소계 — Summary③ 본사 구분별 상세용. */
+export type HqCategoryAllocRow = AllocValues13 & { category: string; humaxTotal: number };
 /** 대계정(re) 하나가 이 행의 배부 금액에 기여한 몫 (Diff 표 툴팁에서 원인 분석용). */
 export type AllocAccountValues = AllocValues13 & { account: string };
 /** 배부판 한 행: 회사/부문 기준으로 STB~H.Networks 13개 배부 사업부의 배부후금액을 모두 더한 값. */
@@ -112,6 +114,8 @@ export type MonthBlock = {
   evcs: EvcsBlock;
   mainAccountByHq: MainAccountByHq;
   allocationBoard: AllocationBoard;
+  /** 본사 구분별(인건비~기타) STB~건물 배부 내역 — Summary③ 전용. */
+  hqCategoryAlloc: HqCategoryAllocRow[];
   cumulative: {
     summary: SummaryBlock;
     category: CategoryRow[];
@@ -121,6 +125,7 @@ export type MonthBlock = {
     evcs: EvcsBlock;
     mainAccountByHq: MainAccountByHq;
     allocationBoard: AllocationBoard;
+    hqCategoryAlloc: HqCategoryAllocRow[];
     label: string;
   };
 };
@@ -142,10 +147,6 @@ export type Trend = {
   fee_by_account_full: Record<string, FullTrendPoint[]>;
 };
 
-export type CategoryBudgetRow = { category: string; budget: number };
-/** EVCS 배부금액(국내+해외 합산) 기준, 구분별 "연 예산"(1~12월 전체, 월 선택과 무관) — 본사/법인 각각. Summary②의 "연 예산" 컬럼용. */
-export type EvcsCategoryAnnualBudgetByHq = { 본사: CategoryBudgetRow[]; 법인: CategoryBudgetRow[] };
-
 export type DashboardData = {
   months: string[];
   /** 예산 테이블 기준 연간 전체 월 목록 (1월~12월, 미경과 기간 포함). */
@@ -155,10 +156,4 @@ export type DashboardData = {
   sourceTable: string;
   byMonth: Record<string, MonthBlock>;
   trend: Trend;
-  evcsCategoryAnnualBudgetByHq: EvcsCategoryAnnualBudgetByHq;
 };
-
-/** [Summary] 코멘트 박스 3개의 키. */
-export type SummaryNoteBoxKey = "humax_total" | "evcs" | "humax_detail";
-/** boxKey -> month -> content. */
-export type SummaryNotes = Record<string, Record<string, string>>;

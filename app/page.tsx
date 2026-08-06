@@ -1,6 +1,5 @@
 import Dashboard from "@/components/Dashboard";
 import { loadDashboardData } from "@/lib/aggregate";
-import { loadSummaryNotes } from "@/lib/summaryNotes";
 
 // 매 요청마다 새로 조회 (캐시 없음) — Supabase에 새 실적을 올리고 새로고침하면 바로 반영됩니다.
 export const dynamic = "force-dynamic";
@@ -8,8 +7,8 @@ export const revalidate = 0;
 
 export default async function Page() {
   try {
-    const [data, notes] = await Promise.all([loadDashboardData(), loadSummaryNotes()]);
-    return <Dashboard data={data} notes={notes} />;
+    const data = await loadDashboardData();
+    return <Dashboard data={data} />;
   } catch (err: any) {
     return (
       <div style={{ padding: 40, fontFamily: "sans-serif", maxWidth: 640, margin: "0 auto" }}>

@@ -10,8 +10,6 @@ import type {
   SummaryBlock,
   FeeOrgRow,
   EvcsBlock,
-  SummaryNotes,
-  SummaryNoteBoxKey,
 } from "./types";
 
 Chart.register(...registerables);
@@ -39,7 +37,7 @@ const C_BUDGET = "#cbd5e1";
 const C_ALT = "#dc2626";
 const C_ALT2 = "#f59e0b";
 
-export function initDashboard(data: DashboardData, notes: SummaryNotes): () => void {
+export function initDashboard(data: DashboardData): () => void {
   const months = data.months;
   const allMonths = data.allMonths;
   const trend = data.trend;
@@ -47,11 +45,6 @@ export function initDashboard(data: DashboardData, notes: SummaryNotes): () => v
   let currentMode: "month" | "cum" = "month";
   // allMonths 기준으로, 실적이 존재하는 마지막 달의 인덱스. 이후 구간이 "미경과 기간".
   const lastActualIdx = allMonths.indexOf(months[months.length - 1]);
-  // [Summary] 코멘트 박스 로컬 상태 (저장 성공 시마다 갱신) — boxKey -> month -> content.
-  const notesState: SummaryNotes = notes;
-  function monthNumLocal(m: string): number {
-    return parseInt(m.replace("월", ""), 10) || 0;
-  }
 
   const fmtM = (nVal: number) => Math.round(nVal / 1e6).toLocaleString("ko-KR");
   const cls = (v: number) => (v < 0 ? ' class="neg"' : "");
@@ -1221,24 +1214,20 @@ export function initDashboard(data: DashboardData, notes: SummaryNotes): () => v
   }
 
   // ================= SUMMARY① Humax합계 / SUMMARY③ Humax합계_상세 (공용) =================
-  /** Summary①/③의 7열(합계(A+B)/STB/MOBILITY/EVCS국내/EVCS해외/HUMAX공통/건물) 표 한 행. */
-  type SumDetailRow =
-    | { kind: "total"; label: string; alloc: AllocationRow; bold: boolean }
-    | { kind: "sub"; label: string; value: number };
+  /** Summary①/③의 7열(합계(A+B)/STB/MOBILITY/EVCS국내/EVCS해외/HUMAX공통/건물) 표 한 행 — STB~건물 값을 모두 채워서 보여준다. */
+  type SumDetailRow = { label: string; alloc: AllocValues13 & { humaxTotal: number }; bold?: boolean; indent?: boolean };
 
   function sumDetailTable(rows: SumDetailRow[]): string {
     const body = rows
       .map((r) => {
-        if (r.kind === "total") {
-          const v = r.alloc;
-          const total = v.humaxTotal + v.building;
-          return (
-            `<tr class="${r.bold ? "tot" : ""}"><td>${r.label}</td><td class="alloc-tot-col">${fmtM(total)}</td>` +
-            `<td>${fmtM(v.stb)}</td><td>${fmtM(v.mobility)}</td><td>${fmtM(v.evcsDomestic)}</td><td>${fmtM(v.evcsOverseas)}</td><td>${fmtM(v.humaxCommon)}</td>` +
-            `<td>${fmtM(v.building)}</td></tr>`
-          );
-        }
-        return `<tr class="fee-sub"><td>${r.label}</td><td class="alloc-tot-col">${fmtM(r.value)}</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
+        const v = r.alloc;
+        const total = v.humaxTotal + v.building;
+        const cls = [r.bold ? "tot" : "", r.indent ? "fee-sub" : ""].filter(Boolean).join(" ");
+        return (
+          `<tr class="${cls}"><td>${r.label}</td><td class="alloc-tot-col">${fmtM(total)}</td>` +
+          `<td>${fmtM(v.stb)}</td><td>${fmtM(v.mobility)}</td><td>${fmtM(v.evcsDomestic)}</td><td>${fmtM(v.evcsOverseas)}</td><td>${fmtM(v.humaxCommon)}</td>` +
+          `<td>${fmtM(v.building)}</td></tr>`
+        );
       })
       .join("");
     return (
@@ -1247,6 +1236,29 @@ export function initDashboard(data: DashboardData, notes: SummaryNotes): () => v
       `<tr><th>STB</th><th>MOBILITY</th><th>EVCS(국내)</th><th>EVCS(해외)</th><th>HUMAX(공통)</th></tr>` +
       `</thead><tbody>${body}</tbody></table>`
     );
+  }
+
+  // Summary① ~ ③ 공통 헤드라인(리포트 스타일) 카드 — 회사 로고 컬러(블루) 하나로 통일.
+  const REPORT_ACCENT = "#1d4ed8";
+  function heroCard(label: string, value: string, sub: string, extraHtml = ""): string {
+    return (
+      `<div class="kcard"><div class="kcard-bar" style="background:${REPORT_ACCENT}"></div>` +
+      `<div class="klabel">${label}</div><div class="kval">${value}</div>` +
+      `<div class="ksub">${sub}</div>${extraHtml}</div>`
+    );
+  }
+
+  /** AllocationBoard에서 본사/법인/Total 행을 찾아 [본사, 법인, 합계(맨 아래)] 3행 표를 만든다. */
+  function allocTotalTable(board: AllocationRow[]): string {
+    const hq = board.find((r) => r.label === "본사(HKR)");
+    const corp = board.find((r) => r.label === "법인" && r.level === 0);
+    const total = board.find((r) => r.label === "Total");
+    if (!hq || !corp || !total) return "";
+    return sumDetailTable([
+      { label: "본사", alloc: hq },
+      { label: "법인", alloc: corp },
+      { label: "합계", alloc: total, bold: true },
+    ]);
   }
 
   /** AllocationBoard(법인 파트)에서 "법인" 합계 행과 "Total" 행 사이의 법인 소속사(level 1) 행들만 추린다. */
@@ -1258,20 +1270,35 @@ export function initDashboard(data: DashboardData, notes: SummaryNotes): () => v
   }
 
   function renderSumTotal() {
-    const scope = getScope();
-    const board = scope.allocationBoard.actual;
-    const hq = board.find((r) => r.label === "본사(HKR)");
-    const corp = board.find((r) => r.label === "법인" && r.level === 0);
-    const total = board.find((r) => r.label === "Total");
-    if (!hq || !corp || !total) return;
-    setText("sumTotalSub", scopeLabel() + " · 백만원");
+    const m = data.byMonth[currentMonth];
+    const cum = m.cumulative;
+    setText("sumTotalMonthSub", currentMonth + " · 백만원");
+    setText("sumTotalCumSub", cum.label + " · 백만원");
+    setHtml("sumTotalMonthTable", allocTotalTable(m.allocationBoard.actual));
+    setHtml("sumTotalCumTable", allocTotalTable(cum.allocationBoard.actual));
+
+    // 헤드라인 카드: 당월 실적 / 당월누계 실적 / 본사·법인 비중 — 표를 보지 않아도 핵심만 먼저 보이도록.
+    const totalA = m.allocationBoard.actual.find((r) => r.label === "Total");
+    const totalB = m.allocationBoard.budget.find((r) => r.label === "Total");
+    const cumA = cum.allocationBoard.actual.find((r) => r.label === "Total");
+    const cumB = cum.allocationBoard.budget.find((r) => r.label === "Total");
+    const hqCumA = cum.allocationBoard.actual.find((r) => r.label === "본사(HKR)");
+    const corpCumA = cum.allocationBoard.actual.find((r) => r.label === "법인" && r.level === 0);
+    if (!totalA || !totalB || !cumA || !cumB || !hqCumA || !corpCumA) return;
+
+    const mVal = totalA.humaxTotal + totalA.building;
+    const mBud = totalB.humaxTotal + totalB.building;
+    const cVal = cumA.humaxTotal + cumA.building;
+    const cBud = cumB.humaxTotal + cumB.building;
+    const hqVal = hqCumA.humaxTotal + hqCumA.building;
+    const corpVal = corpCumA.humaxTotal + corpCumA.building;
+    const hqPct = cVal ? Math.round((hqVal / cVal) * 100) : 0;
+
     setHtml(
-      "sumTotalTable",
-      sumDetailTable([
-        { kind: "total", label: "본사", alloc: hq, bold: false },
-        { kind: "total", label: "법인", alloc: corp, bold: false },
-        { kind: "total", label: "합계", alloc: total, bold: true },
-      ])
+      "sumTotalHero",
+      heroCard("당월 실적", fmtM(mVal) + '<span class="kunit"> 백만원</span>', currentMonth, rateBadgeCell(rateOf(mVal, mBud))) +
+        heroCard("당월누계 실적", fmtM(cVal) + '<span class="kunit"> 백만원</span>', cum.label, rateBadgeCell(rateOf(cVal, cBud))) +
+        heroCard("본사 : 법인", `${hqPct} : ${100 - hqPct}`, `본사 ${fmtM(hqVal)} · 법인 ${fmtM(corpVal)} 백만원`)
     );
   }
 
@@ -1284,36 +1311,62 @@ export function initDashboard(data: DashboardData, notes: SummaryNotes): () => v
     if (!total || !hq || !corp) return;
     setText("sumDetailSub", scopeLabel() + " · 백만원");
 
-    const hqCatRows: SumDetailRow[] = scope.categoryByHq.본사.map((c) => ({ kind: "sub", label: c.category, value: c.actual }));
+    // 본사 구분별(인건비~기타) STB~건물 배부 내역 — 더 이상 "합계" 한 칸만이 아니라 전체 열을 채운다.
+    const hqCatRows: SumDetailRow[] = scope.hqCategoryAlloc.map((c) => ({ label: c.category, alloc: c, indent: true }));
 
+    // 법인 소속사별(HUS~HSZ, HTR/HDG는 합산) STB~건물 배부 내역 — AllocationRow가 이미 전체 열을 갖고 있으므로 그대로 사용.
     const corpRows = corpCompanyRows(board);
     const htrHdg = corpRows.filter((r) => r.label === "HTR" || r.label === "HDG");
     const others = corpRows.filter((r) => r.label !== "HTR" && r.label !== "HDG");
-    const corpDetailRows: SumDetailRow[] = others.map((r) => ({ kind: "sub", label: r.label, value: r.humaxTotal + r.building }));
+    const corpDetailRows: SumDetailRow[] = others.map((r) => ({ label: r.label, alloc: r, indent: true }));
     if (htrHdg.length) {
-      corpDetailRows.push({
-        kind: "sub",
-        label: "HTR/HDG",
-        value: htrHdg.reduce((s, r) => s + r.humaxTotal + r.building, 0),
-      });
+      const merged: AllocValues13 & { humaxTotal: number } = {
+        stb: 0, mobility: 0, evcsDomestic: 0, evcsOverseas: 0, humaxCommon: 0, building: 0,
+        hMobility: 0, hEv: 0, hiparking: 0, peoplecar: 0, winercom: 0, holdings: 0, hNetworks: 0,
+        humaxTotal: 0,
+      };
+      for (const f of ALLOC_FIELDS) merged[f] = htrHdg.reduce((s, r) => s + r[f], 0);
+      merged.humaxTotal = htrHdg.reduce((s, r) => s + r.humaxTotal, 0);
+      corpDetailRows.push({ label: "HTR/HDG", alloc: merged, indent: true });
     }
 
+    // 본사+법인 합계는 가장 하단에 배치한다.
     setHtml(
       "sumDetailTable",
       sumDetailTable([
-        { kind: "total", label: "합계", alloc: total, bold: true },
-        { kind: "total", label: "본사", alloc: hq, bold: true },
+        { label: "본사", alloc: hq, bold: true },
         ...hqCatRows,
-        { kind: "total", label: "법인", alloc: corp, bold: true },
+        { label: "법인", alloc: corp, bold: true },
         ...corpDetailRows,
+        { label: "합계", alloc: total, bold: true },
       ])
+    );
+
+    // 헤드라인 카드: 총 합계 / 본사 최대 구분 / 법인 최대 소속사.
+    const totalB = scope.allocationBoard.budget.find((r) => r.label === "Total");
+    const totalVal = total.humaxTotal + total.building;
+    const topCat = [...scope.hqCategoryAlloc].sort((a, b) => b.humaxTotal + b.building - (a.humaxTotal + a.building))[0];
+    const topCorp = [...corpDetailRows].sort((a, b) => b.alloc.humaxTotal + b.alloc.building - (a.alloc.humaxTotal + a.alloc.building))[0];
+    setHtml(
+      "sumDetailHero",
+      heroCard(
+        "총 합계",
+        fmtM(totalVal) + '<span class="kunit"> 백만원</span>',
+        scopeLabel(),
+        totalB ? rateBadgeCell(rateOf(totalVal, totalB.humaxTotal + totalB.building)) : ""
+      ) +
+        heroCard("본사 최대 구분", topCat ? topCat.category : "-", topCat ? fmtM(topCat.humaxTotal + topCat.building) + " 백만원" : "") +
+        heroCard(
+          "법인 최대 소속사",
+          topCorp ? topCorp.label : "-",
+          topCorp ? fmtM(topCorp.alloc.humaxTotal + topCorp.alloc.building) + " 백만원" : ""
+        )
     );
   }
 
   // ================= SUMMARY② EVCS사업부 =================
-  /** 당월/당월누계 EVCS 국내·해외·합계 by 본사/법인/합계 (currentMode 토글과 무관하게 항상 둘 다 보여준다). */
-  function evcsHqSplitTable(label: string, block: { evcs: EvcsBlock }): string {
-    const e = block.evcs;
+  /** 국내·해외 배부 현황: 상단 월/당월·누계 선택(getScope())에 따라 그대로 반영된다. */
+  function evcsSplitTableBody(e: EvcsBlock): string {
     const rowHtml = (hq: "본사" | "법인") => {
       const d = e.byHq[hq].domestic.actual;
       const o = e.byHq[hq].overseas.actual;
@@ -1323,116 +1376,49 @@ export function initDashboard(data: DashboardData, notes: SummaryNotes): () => v
     const totO = e.total.overseas.actual;
     const totRow = `<tr class="tot"><td>합계</td><td>${fmtM(totD)}</td><td>${fmtM(totO)}</td><td>${fmtM(totD + totO)}</td></tr>`;
     return (
-      `<div class="tbl-box" style="margin-bottom:0"><div class="tbl-hd">${label}</div>` +
       `<table class="pl-tbl"><thead><tr><th>Company</th><th>국내</th><th>해외</th><th>합계</th></tr></thead>` +
-      `<tbody>${rowHtml("본사")}${rowHtml("법인")}${totRow}</tbody></table></div>`
+      `<tbody>${rowHtml("본사")}${rowHtml("법인")}${totRow}</tbody></table>`
     );
   }
 
-  /**
-   * 구분별 상세(월별 트렌드): 1월~선택월(경과 6개월 초과 시 분기로 압축) 실적 + 누계/누계구성비(%, 보조)
-   * + 연 예산/예산구성비(%, 보조) + 누계집행률. EVCS 배부금액(국내+해외) 기준, 본사/법인 각각.
-   */
-  function evcsCategoryTrendTable(hq: "본사" | "법인"): string {
-    const monthIdx = months.indexOf(currentMonth);
-    const elapsed = months.slice(0, monthIdx + 1);
-    const useQuarters = elapsed.length > 6;
-    const cols: { label: string; monthsIn: string[] }[] = useQuarters
-      ? [1, 2, 3, 4]
-          .map((q) => ({ label: `${q}Q`, monthsIn: elapsed.filter((m) => Math.ceil(monthNumLocal(m) / 3) === q) }))
-          .filter((c) => c.monthsIn.length > 0)
-      : elapsed.map((m) => ({ label: m, monthsIn: [m] }));
-
-    const cumRows = data.byMonth[currentMonth].cumulative.evcs.categoryByHq[hq];
-    const annualBudget = data.evcsCategoryAnnualBudgetByHq[hq];
-    const cumTotal = cumRows.reduce((s, r) => s + r.actual, 0);
-    const budgetTotal = annualBudget.reduce((s, r) => s + r.budget, 0);
-
-    function monthlyVal(cat: string | null, m: string): number {
-      const rows = data.byMonth[m].evcs.categoryByHq[hq];
-      if (cat === null) return rows.reduce((s, r) => s + r.actual, 0);
-      return rows.find((r) => r.category === cat)?.actual || 0;
-    }
-    function rowFor(cat: string | null, label: string, rowClass: string): string {
-      const cumActual = cat === null ? cumTotal : cumRows.find((r) => r.category === cat)?.actual || 0;
-      const budget = cat === null ? budgetTotal : annualBudget.find((r) => r.category === cat)?.budget || 0;
-      const cumPct = cumTotal ? Math.round((cumActual / cumTotal) * 100) : 0;
-      const budPct = budgetTotal ? Math.round((budget / budgetTotal) * 100) : 0;
-      const monthCells = cols
-        .map((c) => `<td>${fmtM(c.monthsIn.reduce((s, m) => s + monthlyVal(cat, m), 0))}</td>`)
-        .join("");
-      return (
-        `<tr class="${rowClass}"><td>${label}</td>${monthCells}` +
-        `<td>${fmtM(cumActual)}</td><td class="pct-aux">${cumPct}%</td>` +
-        `<td>${fmtM(budget)}</td><td class="pct-aux">${budPct}%</td>` +
-        `<td class="badge-cell">${rateBadgeCell(rateOf(cumActual, budget))}</td></tr>`
-      );
-    }
-
-    const totalRow = rowFor(null, "합계", "tot");
-    const bodyRows = cumRows.map((r) => rowFor(r.category, r.category, "fee-sub")).join("");
-    const headCols = cols.map((c) => `<th>${c.label}</th>`).join("");
-    return (
-      `<table class="pl-tbl"><thead><tr><th>구분</th>${headCols}` +
-      `<th>누계</th><th class="pct-aux">비중</th><th>연 예산</th><th class="pct-aux">비중</th><th>누계집행률</th></tr></thead>` +
-      `<tbody>${totalRow}${bodyRows}</tbody></table>`
-    );
+  /** 구분별 상세: 예산/실적/차이/집행률 5열 표 (PPT처럼 한 페이지 폭에 들어가도록 컴팩트하게 구성). */
+  function evcsCategoryTable(rows: CategoryRow[]): string {
+    const body = rows.map((c) => row(c.category, c.actual, c.budget)).join("");
+    const totA = rows.reduce((s, c) => s + c.actual, 0);
+    const totB = rows.reduce((s, c) => s + c.budget, 0);
+    return table5(body + row("합계", totA, totB, "tot"));
   }
 
   function renderSumEvcs() {
-    const m = data.byMonth[currentMonth];
-    const cum = m.cumulative;
-    setText("sumEvcsSub", currentMonth + " 기준 · EVCS 배부금액(국내+해외) · 백만원");
-    setHtml("evcsSumMonthTable", evcsHqSplitTable("당월", m));
-    setHtml("evcsSumCumTable", evcsHqSplitTable("당월 누계", cum));
-    setHtml("evcsCatTrendHqTable", evcsCategoryTrendTable("본사"));
-    setHtml("evcsCatTrendCorpTable", evcsCategoryTrendTable("법인"));
-  }
+    const scope = getScope();
+    const e = scope.evcs;
+    setText("evcsSplitSub", scopeLabel() + " · EVCS 배부금액 · 백만원");
+    setHtml("evcsSplitTable", evcsSplitTableBody(e));
+    setText("sumEvcsSub", scopeLabel() + " · 백만원");
+    setHtml("evcsCatHqTable", evcsCategoryTable(e.categoryByHq.본사));
+    setHtml("evcsCatCorpTable", evcsCategoryTable(e.categoryByHq.법인));
 
-  // ================= [Summary] 코멘트 박스 (Supabase 영구 저장) =================
-  const NOTE_BOXES: { boxKey: SummaryNoteBoxKey; textareaId: string; saveBtnId: string; statusId: string }[] = [
-    { boxKey: "humax_total", textareaId: "sumTotalNote", saveBtnId: "sumTotalNoteSave", statusId: "sumTotalNoteStatus" },
-    { boxKey: "evcs", textareaId: "sumEvcsNote", saveBtnId: "sumEvcsNoteSave", statusId: "sumEvcsNoteStatus" },
-    { boxKey: "humax_detail", textareaId: "sumDetailNote", saveBtnId: "sumDetailNoteSave", statusId: "sumDetailNoteStatus" },
-  ];
-  function refreshNoteBoxes() {
-    for (const nb of NOTE_BOXES) {
-      const ta = el(nb.textareaId) as HTMLTextAreaElement | null;
-      if (ta && document.activeElement !== ta) ta.value = notesState[nb.boxKey]?.[currentMonth] || "";
-      setText(nb.statusId, "");
-    }
+    // 헤드라인 카드: EVCS 실적 / 국내·해외 비중 / 본사·법인 비중.
+    const totA = e.total.domestic.actual + e.total.overseas.actual;
+    const totB = e.total.domestic.budget + e.total.overseas.budget;
+    const domPct = totA ? Math.round((e.total.domestic.actual / totA) * 100) : 0;
+    const hqA = e.byHq.본사.domestic.actual + e.byHq.본사.overseas.actual;
+    const corpA = e.byHq.법인.domestic.actual + e.byHq.법인.overseas.actual;
+    const hqPct = totA ? Math.round((hqA / totA) * 100) : 0;
+
+    setHtml(
+      "evcsHero",
+      heroCard("EVCS 실적", fmtM(totA) + '<span class="kunit"> 백만원</span>', scopeLabel(), rateBadgeCell(rateOf(totA, totB))) +
+        heroCard("국내 : 해외", `${domPct} : ${100 - domPct}`, `국내 ${fmtM(e.total.domestic.actual)} · 해외 ${fmtM(e.total.overseas.actual)} 백만원`) +
+        heroCard("본사 : 법인", `${hqPct} : ${100 - hqPct}`, `본사 ${fmtM(hqA)} · 법인 ${fmtM(corpA)} 백만원`)
+    );
   }
-  async function saveNoteBox(nb: (typeof NOTE_BOXES)[number]) {
-    const ta = el(nb.textareaId) as HTMLTextAreaElement | null;
-    if (!ta) return;
-    const content = ta.value;
-    const month = currentMonth;
-    setText(nb.statusId, "저장 중…");
-    try {
-      const res = await fetch("/api/summary-notes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ boxKey: nb.boxKey, month, content }),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      (notesState[nb.boxKey] ||= {})[month] = content;
-      setText(nb.statusId, `저장됨 ${new Date().toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}`);
-    } catch {
-      setText(nb.statusId, "저장 실패 - 다시 시도해주세요");
-    }
-  }
-  const noteSaveHandlers = NOTE_BOXES.map((nb) => {
-    const handler = () => saveNoteBox(nb);
-    el(nb.saveBtnId)?.addEventListener("click", handler);
-    return { id: nb.saveBtnId, handler };
-  });
 
   function renderAll() {
     setText("topbarMeta", `단위: 백만원 · 기준월: ${currentMonth} · 보기: ${currentMode === "month" ? "당월" : "누계(YTD)"}`);
     renderSumTotal();
     renderSumEvcs();
     renderSumDetail();
-    refreshNoteBoxes();
     renderSummary();
     renderCategory();
     renderEvcs();
@@ -1474,7 +1460,6 @@ export function initDashboard(data: DashboardData, notes: SummaryNotes): () => v
     monthSelect?.removeEventListener("change", onMonthChange);
     modeToggle?.removeEventListener("click", onModeToggleClick);
     tabEls.forEach((t) => t.removeEventListener("click", onTabClick));
-    noteSaveHandlers.forEach(({ id, handler }) => el(id)?.removeEventListener("click", handler));
     Object.keys(charts).forEach(destroyChart);
   };
 }
