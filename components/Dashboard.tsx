@@ -55,7 +55,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
             <label>보고 월</label>
             <select id="monthSelect" defaultValue={data.defaultMonth} />
           </div>
-          <div className="filter-box">
+          <div className="filter-box" id="modeFilterBox">
             <label>보기</label>
             <div className="seg" id="modeToggle">
               <button className="seg-btn active" data-mode="month" type="button">
@@ -106,10 +106,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
             <div className="sheet-title">Humax합계</div>
           </div>
         </div>
-        <div className="summary-split">
-          <div className="kpi-row-3" id="sumTotalHero" />
-          <SummaryCommentBox boxKey="humax_total" accent="#1d4ed8" />
-        </div>
+        <SummaryCommentBox boxKey="humax_total" accent="#1d4ed8" />
 
         <div className="section-lead">상세</div>
         <div className="tbl-box" style={{ marginBottom: 16 }}>
@@ -139,10 +136,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
             <div className="sheet-title">EVCS사업부</div>
           </div>
         </div>
-        <div className="summary-split">
-          <div className="kpi-row-3" id="evcsHero" />
-          <SummaryCommentBox boxKey="evcs" accent="#1d4ed8" />
-        </div>
+        <SummaryCommentBox boxKey="evcs" accent="#1d4ed8" />
 
         <div className="section-lead">
           국내 · 해외 배부 현황 <span className="sub" id="evcsSplitSub" />
@@ -174,10 +168,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
             <div className="sheet-title">Humax합계_상세</div>
           </div>
         </div>
-        <div className="summary-split">
-          <div className="kpi-row-3" id="sumDetailHero" />
-          <SummaryCommentBox boxKey="humax_detail" accent="#1d4ed8" />
-        </div>
+        <SummaryCommentBox boxKey="humax_detail" accent="#1d4ed8" />
 
         <div className="section-lead">
           상세 <span className="sub" id="sumDetailSub" />

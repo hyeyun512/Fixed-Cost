@@ -307,6 +307,12 @@ export function initDashboard(data: DashboardData): () => void {
     else (CHART_BUILDERS[tabId] = CHART_BUILDERS[tabId] || []).push(run);
   }
 
+  // Humax합계(Summary①) 탭은 당월/당월누계를 항상 함께 보여주므로, 상단 당월/누계 토글은
+  // 그 탭에서 아무 효과가 없어 혼동을 준다 — 해당 탭에서만 토글을 숨긴다.
+  function updateModeToggleVisibility(tabId: string) {
+    const box = el("modeFilterBox");
+    if (box) box.style.display = tabId === "sum-total" ? "none" : "";
+  }
   function onTabClick(ev: Event) {
     const target = ev.currentTarget as HTMLElement;
     const id = target.dataset.tab!;
@@ -314,6 +320,7 @@ export function initDashboard(data: DashboardData): () => void {
     document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
     el("tab-" + id)?.classList.add("active");
     target.classList.add("active");
+    updateModeToggleVisibility(id);
     requestAnimationFrame(() => {
       (CHART_BUILDERS[id] || []).forEach((fn) => fn());
       CHART_BUILDERS[id] = [];
@@ -321,6 +328,7 @@ export function initDashboard(data: DashboardData): () => void {
   }
   const tabEls = Array.from(document.querySelectorAll<HTMLElement>(".tab"));
   tabEls.forEach((t) => t.addEventListener("click", onTabClick));
+  updateModeToggleVisibility("sum-total");
 
   function legendHtml(pairs: [string, string][]): string {
     return pairs
@@ -1238,16 +1246,6 @@ export function initDashboard(data: DashboardData): () => void {
     );
   }
 
-  // Summary① ~ ③ 공통 헤드라인(리포트 스타일) 카드 — 회사 로고 컬러(블루) 하나로 통일.
-  const REPORT_ACCENT = "#1d4ed8";
-  function heroCard(label: string, value: string, sub: string, extraHtml = ""): string {
-    return (
-      `<div class="kcard"><div class="kcard-bar" style="background:${REPORT_ACCENT}"></div>` +
-      `<div class="klabel">${label}</div><div class="kval">${value}</div>` +
-      `<div class="ksub">${sub}</div>${extraHtml}</div>`
-    );
-  }
-
   /** AllocationBoard에서 본사/법인/Total 행을 찾아 [본사, 법인, 합계(맨 아래)] 3행 표를 만든다. */
   function allocTotalTable(board: AllocationRow[]): string {
     const hq = board.find((r) => r.label === "본사(HKR)");
@@ -1276,30 +1274,6 @@ export function initDashboard(data: DashboardData): () => void {
     setText("sumTotalCumSub", cum.label + " · 백만원");
     setHtml("sumTotalMonthTable", allocTotalTable(m.allocationBoard.actual));
     setHtml("sumTotalCumTable", allocTotalTable(cum.allocationBoard.actual));
-
-    // 헤드라인 카드: 당월 실적 / 당월누계 실적 / 본사·법인 비중 — 표를 보지 않아도 핵심만 먼저 보이도록.
-    const totalA = m.allocationBoard.actual.find((r) => r.label === "Total");
-    const totalB = m.allocationBoard.budget.find((r) => r.label === "Total");
-    const cumA = cum.allocationBoard.actual.find((r) => r.label === "Total");
-    const cumB = cum.allocationBoard.budget.find((r) => r.label === "Total");
-    const hqCumA = cum.allocationBoard.actual.find((r) => r.label === "본사(HKR)");
-    const corpCumA = cum.allocationBoard.actual.find((r) => r.label === "법인" && r.level === 0);
-    if (!totalA || !totalB || !cumA || !cumB || !hqCumA || !corpCumA) return;
-
-    const mVal = totalA.humaxTotal + totalA.building;
-    const mBud = totalB.humaxTotal + totalB.building;
-    const cVal = cumA.humaxTotal + cumA.building;
-    const cBud = cumB.humaxTotal + cumB.building;
-    const hqVal = hqCumA.humaxTotal + hqCumA.building;
-    const corpVal = corpCumA.humaxTotal + corpCumA.building;
-    const hqPct = cVal ? Math.round((hqVal / cVal) * 100) : 0;
-
-    setHtml(
-      "sumTotalHero",
-      heroCard("당월 실적", fmtM(mVal) + '<span class="kunit"> 백만원</span>', currentMonth, rateBadgeCell(rateOf(mVal, mBud))) +
-        heroCard("당월누계 실적", fmtM(cVal) + '<span class="kunit"> 백만원</span>', cum.label, rateBadgeCell(rateOf(cVal, cBud))) +
-        heroCard("본사 : 법인", `${hqPct} : ${100 - hqPct}`, `본사 ${fmtM(hqVal)} · 법인 ${fmtM(corpVal)} 백만원`)
-    );
   }
 
   function renderSumDetail() {
@@ -1341,27 +1315,6 @@ export function initDashboard(data: DashboardData): () => void {
         { label: "합계", alloc: total, bold: true },
       ])
     );
-
-    // 헤드라인 카드: 총 합계 / 본사 최대 구분 / 법인 최대 소속사.
-    const totalB = scope.allocationBoard.budget.find((r) => r.label === "Total");
-    const totalVal = total.humaxTotal + total.building;
-    const topCat = [...scope.hqCategoryAlloc].sort((a, b) => b.humaxTotal + b.building - (a.humaxTotal + a.building))[0];
-    const topCorp = [...corpDetailRows].sort((a, b) => b.alloc.humaxTotal + b.alloc.building - (a.alloc.humaxTotal + a.alloc.building))[0];
-    setHtml(
-      "sumDetailHero",
-      heroCard(
-        "총 합계",
-        fmtM(totalVal) + '<span class="kunit"> 백만원</span>',
-        scopeLabel(),
-        totalB ? rateBadgeCell(rateOf(totalVal, totalB.humaxTotal + totalB.building)) : ""
-      ) +
-        heroCard("본사 최대 구분", topCat ? topCat.category : "-", topCat ? fmtM(topCat.humaxTotal + topCat.building) + " 백만원" : "") +
-        heroCard(
-          "법인 최대 소속사",
-          topCorp ? topCorp.label : "-",
-          topCorp ? fmtM(topCorp.alloc.humaxTotal + topCorp.alloc.building) + " 백만원" : ""
-        )
-    );
   }
 
   // ================= SUMMARY② EVCS사업부 =================
@@ -1397,21 +1350,6 @@ export function initDashboard(data: DashboardData): () => void {
     setText("sumEvcsSub", scopeLabel() + " · 백만원");
     setHtml("evcsCatHqTable", evcsCategoryTable(e.categoryByHq.본사));
     setHtml("evcsCatCorpTable", evcsCategoryTable(e.categoryByHq.법인));
-
-    // 헤드라인 카드: EVCS 실적 / 국내·해외 비중 / 본사·법인 비중.
-    const totA = e.total.domestic.actual + e.total.overseas.actual;
-    const totB = e.total.domestic.budget + e.total.overseas.budget;
-    const domPct = totA ? Math.round((e.total.domestic.actual / totA) * 100) : 0;
-    const hqA = e.byHq.본사.domestic.actual + e.byHq.본사.overseas.actual;
-    const corpA = e.byHq.법인.domestic.actual + e.byHq.법인.overseas.actual;
-    const hqPct = totA ? Math.round((hqA / totA) * 100) : 0;
-
-    setHtml(
-      "evcsHero",
-      heroCard("EVCS 실적", fmtM(totA) + '<span class="kunit"> 백만원</span>', scopeLabel(), rateBadgeCell(rateOf(totA, totB))) +
-        heroCard("국내 : 해외", `${domPct} : ${100 - domPct}`, `국내 ${fmtM(e.total.domestic.actual)} · 해외 ${fmtM(e.total.overseas.actual)} 백만원`) +
-        heroCard("본사 : 법인", `${hqPct} : ${100 - hqPct}`, `본사 ${fmtM(hqA)} · 법인 ${fmtM(corpA)} 백만원`)
-    );
   }
 
   function renderAll() {
