@@ -307,11 +307,12 @@ export function initDashboard(data: DashboardData): () => void {
     else (CHART_BUILDERS[tabId] = CHART_BUILDERS[tabId] || []).push(run);
   }
 
-  // Humax합계(Summary①) 탭은 당월/당월누계를 항상 함께 보여주므로, 상단 당월/누계 토글은
-  // 그 탭에서 아무 효과가 없어 혼동을 준다 — 해당 탭에서만 토글을 숨긴다.
+  // Summary①·②는 당월과 누계를 항상 한 화면에 함께 보여주므로 상단 당월/누계 토글이 아무 효과가 없다.
+  // 그대로 두면 눌러도 숫자가 안 바뀌어 혼동을 주므로 해당 탭에서는 토글을 숨긴다.
+  const MODE_TOGGLE_HIDDEN_TABS = ["sum-total", "sum-evcs"];
   function updateModeToggleVisibility(tabId: string) {
     const box = el("modeFilterBox");
-    if (box) box.style.display = tabId === "sum-total" ? "none" : "";
+    if (box) box.style.display = MODE_TOGGLE_HIDDEN_TABS.includes(tabId) ? "none" : "";
   }
   function onTabClick(ev: Event) {
     const target = ev.currentTarget as HTMLElement;
@@ -1490,32 +1491,46 @@ export function initDashboard(data: DashboardData): () => void {
   }
 
   /**
-   * 국내·해외 배부 현황: 본사/법인/합계 × 국내/해외/합계 금액 + 연간 예산 대비 누계 집행률.
-   * 금액은 상단 당월/누계 선택을 따르고, 집행률은 항상 누계 기준으로 계산한다.
+   * 국내·해외 배부 현황.
+   * 열은 기간 흐름(당월 → 당월 누계 → 연간 예산 → 집행률)으로만 두고, 본사/법인 × 국내/해외는 행 계층으로 내렸다.
+   * 이렇게 하면 같은 행 안에서 "누계 ÷ 연간 예산 = 집행률"이 바로 검산된다
+   * (이전 표는 금액이 당월인데 집행률만 누계라 계산이 맞지 않아 보였다).
    */
-  function evcsSplitTableBody(e: EvcsBlock, cumE: EvcsBlock): string {
-    const rowHtml = (hq: "본사" | "법인") => {
-      const d = e.byHq[hq].domestic.actual;
-      const o = e.byHq[hq].overseas.actual;
-      const cum = cumE.byHq[hq].domestic.actual + cumE.byHq[hq].overseas.actual;
-      return (
-        `<tr><td>${hq}</td><td>${fmtM(d)}</td><td>${fmtM(o)}</td><td class="col-sum">${fmtM(d + o)}</td>` +
-        `<td>${fmtM(evcsAnnual[hq].total)}</td>${annualRateCell(cum, evcsAnnual[hq].total)}</tr>`
-      );
+  function evcsSplitTableBody(monthE: EvcsBlock, cumE: EvcsBlock): string {
+    const cell = (v: number) => `<td>${fmtM(v)}</td>`;
+    const line = (label: string, m: number, c: number, a: number, cls = "") =>
+      `<tr class="${cls}"><td>${label}</td>${cell(m)}<td class="col-sum">${fmtM(c)}</td>${cell(a)}${annualRateCell(c, a)}</tr>`;
+
+    // 소계를 그룹 머리행으로 올리고 국내/해외를 그 아래 하위 행으로 둔다 (별도 머리행 없이 계층 표현).
+    // 값이 전부 0인 하위 행(예: 법인의 국내 배부)은 읽는 사람에게 의미가 없어 생략한다.
+    const hqBlock = (hq: "본사" | "법인") => {
+      const m = monthE.byHq[hq];
+      const c = cumE.byHq[hq];
+      const a = evcsAnnual[hq];
+      const subs = [
+        { label: "국내", mv: m.domestic.actual, cv: c.domestic.actual, av: a.domestic },
+        { label: "해외", mv: m.overseas.actual, cv: c.overseas.actual, av: a.overseas },
+      ].filter((s) => s.mv !== 0 || s.cv !== 0 || s.av !== 0);
+      const parent = line(hq, m.domestic.actual + m.overseas.actual, c.domestic.actual + c.overseas.actual, a.total, "subtot");
+      // 남은 하위 행이 하나뿐이면 그 값이 그룹 행과 똑같아 중복이므로 하위 행을 생략한다 (예: 국내 배부가 없는 법인).
+      if (subs.length < 2) return parent;
+      return parent + subs.map((s) => line(s.label, s.mv, s.cv, s.av, "fee-sub")).join("");
     };
-    const totD = e.total.domestic.actual;
-    const totO = e.total.overseas.actual;
-    const cumTot = cumE.total.domestic.actual + cumE.total.overseas.actual;
-    const annualTot = evcsAnnual.본사.total + evcsAnnual.법인.total;
-    const totRow =
-      `<tr class="tot"><td>합계</td><td>${fmtM(totD)}</td><td>${fmtM(totO)}</td><td class="col-sum">${fmtM(totD + totO)}</td>` +
-      `<td>${fmtM(annualTot)}</td>${annualRateCell(cumTot, annualTot)}</tr>`;
+
+    const totalRow = line(
+      "전사 합계",
+      monthE.total.domestic.actual + monthE.total.overseas.actual,
+      cumE.total.domestic.actual + cumE.total.overseas.actual,
+      evcsAnnual.본사.total + evcsAnnual.법인.total,
+      "tot"
+    );
+
     return (
       `<table class="pl-tbl sum-tbl">` +
-      colgroupHtml(110, 96, 5) +
-      `<thead><tr><th>Company</th><th>국내</th><th>해외</th><th class="col-sum">합계</th>` +
+      colgroupHtml(126, 96, 4) +
+      `<thead><tr><th>구분</th><th>${currentMonth} 실적</th><th class="col-sum">누계 실적</th>` +
       `<th>연간 예산</th><th>누계 집행률</th></tr></thead>` +
-      `<tbody>${rowHtml("본사")}${rowHtml("법인")}${totRow}</tbody></table>`
+      `<tbody>${hqBlock("본사")}${hqBlock("법인")}${totalRow}</tbody></table>`
     );
   }
 
@@ -1647,12 +1662,11 @@ export function initDashboard(data: DashboardData): () => void {
   }
 
   function renderSumEvcs() {
-    const scope = getScope();
-    const e = scope.evcs;
+    const monthE = data.byMonth[currentMonth].evcs;
     const cumE = data.byMonth[currentMonth].cumulative.evcs;
 
-    setText("evcsSplitSub", scopeLabel() + " · EVCS 배부금액 · 백만원 (집행률은 연간 예산 대비 누계)");
-    setHtml("evcsSplitTable", evcsSplitTableBody(e, cumE));
+    setText("evcsSplitSub", `EVCS 배부금액 · 백만원 · 누계 집행률 = 누계 실적 ÷ 연간 예산`);
+    setHtml("evcsSplitTable", evcsSplitTableBody(monthE, cumE));
 
     // 구분별 금액 규모 — 월별 구성 막대 + (누계 실적 vs 연간 예산) 막대, 본사/법인 각각.
     setText("sumEvcsSub", `${months[0]}~${currentMonth} · 백만원 · 막대 안 표기는 "금액·구성비"`);
