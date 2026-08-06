@@ -587,16 +587,10 @@ export function initDashboard(data: DashboardData): () => void {
     return new Chart(canvas, config);
   }
 
-  /** 도넛 옆에 붙는 범례 — 항목명 + 금액 + 비중을 한 줄씩 보여준다. */
-  function donutLegendHtml(labels: string[], values: number[]): string {
-    const total = values.reduce((a, b) => a + b, 0) || 1;
+  /** 도넛 범례 — 금액·비중은 왼쪽 표와 도넛에 이미 있으므로 항목명만 보여준다. */
+  function donutLegendHtml(labels: string[]): string {
     return labels
-      .map(
-        (l, i) =>
-          `<li><span class="dleg-dot" style="background:${ALLOC_BLUES[i % ALLOC_BLUES.length]}"></span>` +
-          `<span class="dleg-name">${l}</span><span class="dleg-val">${fmtM(values[i])}</span>` +
-          `<span class="dleg-pct">${Math.round((values[i] / total) * 100)}%</span></li>`
-      )
+      .map((l, i) => `<li><span class="dleg-dot" style="background:${ALLOC_BLUES[i % ALLOC_BLUES.length]}"></span><span class="dleg-name">${l}</span></li>`)
       .join("");
   }
 
@@ -1375,8 +1369,8 @@ export function initDashboard(data: DashboardData): () => void {
     // 표의 합계 행을 배부 항목별 구성비 도넛으로 시각화 (비중은 조각 위, 금액은 우측 범례).
     const monthVals = allocDonutValues(m.allocationBoard.actual);
     const cumVals = allocDonutValues(cum.allocationBoard.actual);
-    setHtml("sumTotalMonthDonutLegend", donutLegendHtml(ALLOC_DONUT_LABELS, monthVals));
-    setHtml("sumTotalCumDonutLegend", donutLegendHtml(ALLOC_DONUT_LABELS, cumVals));
+    setHtml("sumTotalMonthDonutLegend", donutLegendHtml(ALLOC_DONUT_LABELS));
+    setHtml("sumTotalCumDonutLegend", donutLegendHtml(ALLOC_DONUT_LABELS));
     queueChart("sum-total", "sumTotalMonthDonut", () => allocDonut("sumTotalMonthDonut", ALLOC_DONUT_LABELS, monthVals));
     queueChart("sum-total", "sumTotalCumDonut", () => allocDonut("sumTotalCumDonut", ALLOC_DONUT_LABELS, cumVals));
   }
@@ -1525,32 +1519,105 @@ export function initDashboard(data: DashboardData): () => void {
     );
   }
 
-  /** 구분(인건비~기타)별 금액 규모 — 금액/비중과, 연간 예산 대비 누계 집행률. */
-  function evcsCategoryTable(hq: "본사" | "법인", rows: CategoryRow[], cumRows: CategoryRow[]): string {
-    const totA = rows.reduce((s, c) => s + c.actual, 0) || 1;
-    const annual = evcsAnnual[hq].byCategory;
-    const body = rows
-      .map((c) => {
-        const cum = cumRows.find((x) => x.category === c.category)?.actual || 0;
-        const ab = annual.find((x) => x.category === c.category)?.budget || 0;
-        return (
-          `<tr><td>${c.category}</td><td>${fmtM(c.actual)}</td>` +
-          `<td class="pct-aux">${Math.round((c.actual / totA) * 100)}%</td>` +
-          `<td>${fmtM(ab)}</td>${annualRateCell(cum, ab)}</tr>`
-        );
-      })
-      .join("");
-    const cumTot = cumRows.reduce((s, c) => s + c.actual, 0);
-    const annualTot = annual.reduce((s, c) => s + c.budget, 0);
-    const totRow =
-      `<tr class="tot"><td>합계</td><td>${fmtM(rows.reduce((s, c) => s + c.actual, 0))}</td><td class="pct-aux">100%</td>` +
-      `<td>${fmtM(annualTot)}</td>${annualRateCell(cumTot, annualTot)}</tr>`;
-    return (
-      `<table class="pl-tbl sum-tbl">` +
-      colgroupHtml(104, 84, 4) +
-      `<thead><tr><th>구분</th><th>금액</th><th class="pct-aux">비중</th><th>연간 예산</th><th>누계 집행률</th></tr></thead>` +
-      `<tbody>${body}${totRow}</tbody></table>`
+  // ---- 구분별 금액 규모: 누적 막대 그래프 (기존 표를 대체) ----
+  // 구분 순서는 표와 동일하게 categoryByHq의 순서를 그대로 쓴다.
+  const EVCS_CAT_TEXT = ["#fff", "#fff", "#fff", "#1e293b", "#1e293b", "#1e293b"];
+
+  /** 막대 조각 위에 "금액·비중%"을 그린다. 조각이 얇으면 글자가 겹치므로 생략하고 툴팁으로 확인한다. */
+  function stackLabelPlugin(totals: number[]) {
+    return {
+      id: "stackLabels",
+      afterDatasetsDraw(chart: any) {
+        const { ctx } = chart;
+        ctx.save();
+        ctx.font = "600 9px Pretendard, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        chart.data.datasets.forEach((ds: any, di: number) => {
+          const meta = chart.getDatasetMeta(di);
+          meta.data.forEach((bar: any, i: number) => {
+            const v = ds.data[i] as number;
+            if (!v) return;
+            const h = Math.abs(bar.base - bar.y);
+            if (h < 12) return; // 글자가 들어갈 높이가 안 되는 조각은 생략
+            const pct = totals[i] ? Math.round((v / totals[i]) * 100) : 0;
+            ctx.fillStyle = EVCS_CAT_TEXT[di % EVCS_CAT_TEXT.length];
+            ctx.fillText(`${fmtM(v)}·${pct}%`, bar.x, (bar.base + bar.y) / 2);
+          });
+        });
+        ctx.restore();
+      },
+    };
+  }
+
+  function stackedBarChart(canvasId: string, labels: string[], cats: string[], series: number[][]): AnyChart {
+    const canvas = el(canvasId) as HTMLCanvasElement;
+    const totals = labels.map((_, i) => series.reduce((s, arr) => s + arr[i], 0));
+    const datasets = cats.map((c, ci) => ({
+      label: c,
+      data: series[ci],
+      backgroundColor: ALLOC_BLUES[ci % ALLOC_BLUES.length],
+      borderWidth: 0,
+    }));
+    const config: any = {
+      type: "bar",
+      plugins: [stackLabelPlugin(totals)],
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 6 } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx: any) => {
+                const v = ctx.parsed.y as number;
+                const t = totals[ctx.dataIndex] || 1;
+                return `${ctx.dataset.label}: ${fmtM(v)}백만원 (${Math.round((v / t) * 100)}%)`;
+              },
+              footer: (items: any[]) => `합계: ${fmtM(totals[items[0].dataIndex])}백만원`,
+            },
+          },
+        },
+        scales: {
+          x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 } } },
+          // 일부 구분에 소액 마이너스(환입)가 있어도 축이 음수로 내려가지 않게 0에서 시작한다.
+          y: { stacked: true, min: 0, ticks: { callback: (v: any) => fmtM(v as number), font: { size: 10 } }, grid: { color: "#f1f5f9" } },
+        },
+      },
+    };
+    return new Chart(canvas, config);
+  }
+
+  /** 월별(1월~선택월) 구분 구성 누적 막대. */
+  function evcsCatMonthlyChart(canvasId: string, hq: "본사" | "법인"): AnyChart {
+    const idx = months.indexOf(currentMonth);
+    const elapsed = months.slice(0, idx + 1);
+    const cats = data.byMonth[currentMonth].evcs.categoryByHq[hq].map((c) => c.category);
+    const series = cats.map((c) =>
+      elapsed.map((m) => data.byMonth[m].evcs.categoryByHq[hq].find((x) => x.category === c)?.actual || 0)
     );
+    return stackedBarChart(canvasId, elapsed, cats, series);
+  }
+
+  /** 누계 실적 vs 연간 예산 누적 막대 (같은 구분 색상 체계). */
+  function evcsCatCumChart(canvasId: string, hq: "본사" | "법인"): AnyChart {
+    const cumRows = data.byMonth[currentMonth].cumulative.evcs.categoryByHq[hq];
+    const annual = evcsAnnual[hq].byCategory;
+    const cats = cumRows.map((c) => c.category);
+    const series = cats.map((c) => [
+      cumRows.find((x) => x.category === c)?.actual || 0,
+      annual.find((x) => x.category === c)?.budget || 0,
+    ]);
+    return stackedBarChart(canvasId, ["누계 실적", "연간 예산"], cats, series);
+  }
+
+  /** 구분 색상 범례 (막대 그래프 공용). */
+  function evcsCatLegendHtml(hq: "본사" | "법인"): string {
+    return data.byMonth[currentMonth].evcs.categoryByHq[hq]
+      .map((c, i) => `<span class="leg"><span class="leg-dot" style="background:${ALLOC_BLUES[i % ALLOC_BLUES.length]}"></span>${c.category}</span>`)
+      .join("");
   }
 
   /**
@@ -1587,9 +1654,20 @@ export function initDashboard(data: DashboardData): () => void {
     setText("evcsSplitSub", scopeLabel() + " · EVCS 배부금액 · 백만원 (집행률은 연간 예산 대비 누계)");
     setHtml("evcsSplitTable", evcsSplitTableBody(e, cumE));
 
-    setText("sumEvcsSub", scopeLabel() + " · 백만원");
-    setHtml("evcsCatHqTable", evcsCategoryTable("본사", e.categoryByHq.본사, cumE.categoryByHq.본사));
-    setHtml("evcsCatCorpTable", evcsCategoryTable("법인", e.categoryByHq.법인, cumE.categoryByHq.법인));
+    // 구분별 금액 규모 — 월별 구성 막대 + (누계 실적 vs 연간 예산) 막대, 본사/법인 각각.
+    setText("sumEvcsSub", `${months[0]}~${currentMonth} · 백만원 · 막대 안 표기는 "금액·구성비"`);
+    (["본사", "법인"] as const).forEach((hq) => {
+      const key = hq === "본사" ? "Hq" : "Corp";
+      const cumTot = cumE.categoryByHq[hq].reduce((s, c) => s + c.actual, 0);
+      const annualTot = evcsAnnual[hq].byCategory.reduce((s, c) => s + c.budget, 0);
+      setHtml(`evcsCat${key}Legend`, evcsCatLegendHtml(hq));
+      setHtml(
+        `evcsCat${key}Rate`,
+        `연간 예산 대비 누계 집행률 ${rateBadgeCell(rateOf(cumTot, annualTot))}`
+      );
+      queueChart("sum-evcs", `evcsCat${key}Monthly`, () => evcsCatMonthlyChart(`evcsCat${key}Monthly`, hq));
+      queueChart("sum-evcs", `evcsCat${key}Cum`, () => evcsCatCumChart(`evcsCat${key}Cum`, hq));
+    });
 
     setText("evcsTrendSub", `${months[0]}~${months[months.length - 1]} 실적 · 백만원 — ${evcsTrendNote()}`);
     queueChart("sum-evcs", "evcsTrendChart", evcsTrendChart);

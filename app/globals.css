@@ -164,20 +164,35 @@ body{font-family:'Pretendard','Malgun Gothic','Apple SD Gothic Neo',sans-serif;b
 .sum-tbl .pct-aux{color:#94a3b8;font-size:11.5px}
 .sum-tbl th.pct-aux{color:#94a3b8}
 
-/* ---- 도넛(Summary① 배부 구성비) ---- */
-.donut-box{display:flex;align-items:center;gap:14px;background:#fff;border:0.5px solid #e2e8f0;border-radius:12px;padding:12px 16px;margin-bottom:12px}
-.donut-wrap{position:relative;width:158px;height:158px;flex:none}
-.donut-legend{list-style:none;margin:0;padding:0;flex:1;min-width:0}
-.donut-legend li{display:flex;align-items:center;gap:8px;font-size:12px;color:#374151;padding:2.5px 0}
+/* ---- Summary①: [표 + 도넛]을 같은 높이로 묶고, 그 아래에 Summary를 붙여 한 세트로 보이게 한다 ---- */
+.sum-block{width:max-content;max-width:100%;margin-bottom:18px}
+.sum-block-row{display:flex;gap:14px;align-items:stretch;margin-bottom:12px}
+.sum-block-row .tbl-box{margin-bottom:0;width:max-content}
+.sum-block .summary-callout{margin-bottom:0}
+
+/* ---- 도넛(Summary① 배부 구성비) — 금액·비중은 표와 도넛에 있으므로 범례는 항목명만 ---- */
+.donut-box{display:flex;align-items:center;gap:16px;background:#fff;border:0.5px solid #e2e8f0;border-radius:12px;padding:12px 18px}
+.donut-wrap{position:relative;width:150px;height:150px;flex:none}
+.donut-legend{list-style:none;margin:0;padding:0;flex:none}
+.donut-legend li{display:flex;align-items:center;gap:8px;font-size:12px;color:#374151;padding:2.5px 0;white-space:nowrap}
 .dleg-dot{width:9px;height:9px;border-radius:2px;flex:none}
-.dleg-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dleg-val{font-variant-numeric:tabular-nums;font-weight:600;color:#1a202c}
-.dleg-pct{width:38px;text-align:right;font-variant-numeric:tabular-nums;color:#94a3b8}
 
 /* ---- EVCS: 배부 현황 표 + 국내/해외 추이 차트를 한 줄에 ---- */
 .evcs-top{display:grid;grid-template-columns:auto minmax(320px,1fr);gap:16px;align-items:start;margin-bottom:4px}
 .evcs-trend-panel{padding:14px 16px}
 .evcs-trend-wrap{position:relative;height:172px}
+
+/* ---- EVCS: 구분별 금액 규모 (월별 구성 막대 + 누계/연간예산 막대) ---- */
+.evcs-cat-row{background:#fff;border:0.5px solid #e2e8f0;border-radius:12px;padding:12px 16px;margin-bottom:12px}
+.evcs-cat-hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+.evcs-cat-name{font-size:13px;font-weight:700;color:#1a202c}
+.evcs-cat-hd .legend{margin-top:0;gap:10px}
+.evcs-cat-hd .leg{font-size:11px}
+.evcs-cat-rate{margin-left:auto;font-size:11.5px;color:#64748b;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.evcs-cat-rate .kbadge{margin-top:0}
+.evcs-cat-charts{display:grid;grid-template-columns:1fr 250px;gap:14px}
+.evcs-cat-chart{position:relative;height:158px}
+.evcs-cat-chart-cum{border-left:0.5px solid #e2e8f0;padding-left:14px}
 
 footer{text-align:center;padding:22px;color:#94a3b8;font-size:11.5px}
 
@@ -206,13 +221,19 @@ footer{text-align:center;padding:22px;color:#94a3b8;font-size:11.5px}
   .pl-tbl th,.pl-tbl.alloc-tbl th{padding:4px 10px!important}
   .pl-tbl td,.pl-tbl.alloc-tbl td{padding:3px 10px!important}
   .chart-2eq{gap:12px;margin-bottom:10px}
-  .donut-box{padding:6px 10px;margin-bottom:6px;gap:10px}
-  .donut-wrap{width:104px;height:104px}
-  .donut-legend li{font-size:10.5px;padding:0}
+  .donut-box{padding:6px 12px;gap:12px}
+  .donut-wrap{width:112px;height:112px}
+  .donut-legend li{font-size:10.5px;padding:1px 0}
+  .sum-block{margin-bottom:12px}
+  .sum-block-row{margin-bottom:8px;gap:12px}
   .evcs-top{gap:10px}
   .evcs-trend-panel{padding:8px 10px}
   .evcs-trend-wrap{height:104px}
   #tab-sum-evcs .tbl-hd{padding:5px 12px}
+  .evcs-cat-row{padding:8px 12px;margin-bottom:8px}
+  .evcs-cat-hd{margin-bottom:5px;gap:10px}
+  .evcs-cat-chart{height:114px}
+  .evcs-cat-charts{gap:10px;grid-template-columns:1fr 215px}
   .summary-mom-title{margin:10px 0 6px;padding-top:8px}
   .summary-callout{padding:8px 12px!important;margin-bottom:6px!important}
   .summary-comment-list{font-size:11.5px;line-height:1.4}

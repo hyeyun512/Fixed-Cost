@@ -117,44 +117,44 @@ export default function Dashboard({ data }: { data: DashboardData }) {
             <div className="sheet-title">Humax합계</div>
           </div>
         </div>
-        <div className="summary-row">
-          <div className="tbl-box" style={{ marginBottom: 0 }}>
-            <div className="tbl-hd">
-              당월 <span className="sub" id="sumTotalMonthSub" />
+        <div className="sum-block">
+          <div className="sum-block-row">
+            <div className="tbl-box" style={{ marginBottom: 0 }}>
+              <div className="tbl-hd">
+                당월 <span className="sub" id="sumTotalMonthSub" />
+              </div>
+              <div className="tbl-scroll">
+                <div id="sumTotalMonthTable" />
+              </div>
             </div>
-            <div className="tbl-scroll">
-              <div id="sumTotalMonthTable" />
-            </div>
-          </div>
-          <div>
             <div className="donut-box">
               <div className="donut-wrap">
                 <canvas id="sumTotalMonthDonut" />
               </div>
               <ul className="donut-legend" id="sumTotalMonthDonutLegend" />
             </div>
-            <SummaryCommentBox boxKey="humax_total_month" accent="#1d4ed8" variant="side" />
           </div>
+          <SummaryCommentBox boxKey="humax_total_month" accent="#1d4ed8" variant="side" />
         </div>
 
-        <div className="summary-row">
-          <div className="tbl-box" style={{ marginBottom: 0 }}>
-            <div className="tbl-hd">
-              당월 누계 <span className="sub" id="sumTotalCumSub" />
+        <div className="sum-block">
+          <div className="sum-block-row">
+            <div className="tbl-box" style={{ marginBottom: 0 }}>
+              <div className="tbl-hd">
+                당월 누계 <span className="sub" id="sumTotalCumSub" />
+              </div>
+              <div className="tbl-scroll">
+                <div id="sumTotalCumTable" />
+              </div>
             </div>
-            <div className="tbl-scroll">
-              <div id="sumTotalCumTable" />
-            </div>
-          </div>
-          <div>
             <div className="donut-box">
               <div className="donut-wrap">
                 <canvas id="sumTotalCumDonut" />
               </div>
               <ul className="donut-legend" id="sumTotalCumDonutLegend" />
             </div>
-            <SummaryCommentBox boxKey="humax_total_cum" accent="#1d4ed8" variant="side" />
           </div>
+          <SummaryCommentBox boxKey="humax_total_cum" accent="#1d4ed8" variant="side" />
         </div>
       </div>
 
@@ -206,16 +206,23 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         <div className="section-lead">
           구분별 금액 규모<span className="sub" id="sumEvcsSub" />
         </div>
-        <div className="chart-2eq">
-          <div className="tbl-box" style={{ marginBottom: 0 }}>
-            <div className="tbl-hd">본사</div>
-            <div id="evcsCatHqTable" />
+        {(["Hq", "Corp"] as const).map((key) => (
+          <div className="evcs-cat-row" key={key}>
+            <div className="evcs-cat-hd">
+              <span className="evcs-cat-name">{key === "Hq" ? "본사" : "법인"}</span>
+              <span className="legend" id={`evcsCat${key}Legend`} />
+              <span className="evcs-cat-rate" id={`evcsCat${key}Rate`} />
+            </div>
+            <div className="evcs-cat-charts">
+              <div className="evcs-cat-chart">
+                <canvas id={`evcsCat${key}Monthly`} />
+              </div>
+              <div className="evcs-cat-chart evcs-cat-chart-cum">
+                <canvas id={`evcsCat${key}Cum`} />
+              </div>
+            </div>
           </div>
-          <div className="tbl-box" style={{ marginBottom: 0 }}>
-            <div className="tbl-hd">법인</div>
-            <div id="evcsCatCorpTable" />
-          </div>
-        </div>
+        ))}
       </div>
 
       {/* ===================== SUMMARY③ Humax합계_상세 ===================== */}
