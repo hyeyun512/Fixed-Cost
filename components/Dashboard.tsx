@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import type { DashboardData } from "@/lib/types";
 import { initDashboard } from "@/lib/dashboardClient";
-import { SUMMARY_COMMENTS, type SummaryCommentKey } from "@/lib/summaryComments";
+import { SUMMARY_COMMENTS, SUMMARY_DETAIL_GROUPS, type SummaryCommentKey } from "@/lib/summaryComments";
 
 /**
  * 경영진 보고용 고정 코멘트 — 화면에서 직접 고치지 않고, 텍스트를 받아 summaryComments.ts를 수정해 배포한다.
@@ -243,20 +243,50 @@ export default function Dashboard({ data }: { data: DashboardData }) {
             </div>
             <div className="note" id="sumDetailNote" />
           </div>
-          <div className="summary-callout summary-callout-side" style={{ borderLeftColor: "#1d4ed8" }}>
-            <div className="summary-callout-title" style={{ color: "#1d4ed8" }}>
-              Summary
-            </div>
-            <ul className="summary-comment-list">
-              {SUMMARY_COMMENTS.humax_detail.map((line, i) => (
-                <li key={i}>
-                  <span className="summary-comment-dot" style={{ background: "#1d4ed8" }} />
-                  {line}
-                </li>
+          <div className="detail-side">
+            <div className="summary-callout summary-callout-side" style={{ borderLeftColor: "#1d4ed8" }}>
+              <div className="summary-callout-title" style={{ color: "#1d4ed8" }}>
+                Summary
+              </div>
+              {SUMMARY_DETAIL_GROUPS.map((g) => (
+                <div className="summary-group" key={g.label}>
+                  <div className="summary-group-label">{g.label}</div>
+                  <ul className="summary-comment-list">
+                    {g.lines.map((line, i) => (
+                      <li key={i}>
+                        <span className="summary-comment-dot" style={{ background: "#1d4ed8" }} />
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
-            <div className="summary-mom-title" id="sumDetailMomTitle" />
-            <ul className="summary-comment-list" id="sumDetailMomList" />
+              <div className="summary-mom-title" id="sumDetailMomTitle" />
+              <ul className="summary-comment-list" id="sumDetailMomList" />
+            </div>
+
+            <div className="panel detail-trend-panel">
+              <div className="detail-trend-hd">
+                <span className="detail-trend-title">월별 배부액 추이</span>
+                <span className="legend">
+                  <span className="leg">
+                    <span className="leg-line" style={{ borderColor: "#1e3a8a" }} />
+                    STB
+                  </span>
+                  <span className="leg">
+                    <span className="leg-line" style={{ borderColor: "#3b82f6" }} />
+                    HUMAX(공통)
+                  </span>
+                  <span className="leg">
+                    <span className="leg-line" style={{ borderColor: "#94a3b8" }} />
+                    건물
+                  </span>
+                </span>
+              </div>
+              <div className="detail-trend-wrap">
+                <canvas id="detailAllocTrend" />
+              </div>
+            </div>
           </div>
         </div>
       </div>

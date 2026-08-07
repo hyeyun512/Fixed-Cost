@@ -1459,6 +1459,18 @@ export function initDashboard(data: DashboardData): () => void {
       ])
     );
 
+    // 배부 항목별 월별 추이 — 각 항목의 "정상 방향"(STB 소멸 / 공통 감소 / 건물 계단식 감소)과
+    // 실제 흐름이 맞는지 Summary 옆에서 바로 확인할 수 있게 한다.
+    queueChart("sum-detail", "detailAllocTrend", () => {
+      const pick = (m: string, f: "stb" | "humaxCommon" | "building") =>
+        data.byMonth[m].allocationBoard.actual.find((r) => r.label === "Total")?.[f] || 0;
+      return lineChartMulti("detailAllocTrend", months, [
+        { label: "STB", data: months.map((m) => pick(m, "stb")), borderColor: "#1e3a8a", backgroundColor: "#1e3a8a", tension: 0.3, pointRadius: 2.5, borderWidth: 2 },
+        { label: "HUMAX(공통)", data: months.map((m) => pick(m, "humaxCommon")), borderColor: "#3b82f6", backgroundColor: "#3b82f6", tension: 0.3, pointRadius: 2.5, borderWidth: 2 },
+        { label: "건물", data: months.map((m) => pick(m, "building")), borderColor: "#94a3b8", backgroundColor: "#94a3b8", tension: 0.3, pointRadius: 2.5, borderWidth: 2 },
+      ]);
+    });
+
     // '기타'로 묶은 법인이 무엇인지 표 아래 각주로 밝힌다.
     const hasMinor = corpCompanyRows(board).some((r) => MINOR_CORPS.includes(r.label));
     // 본사 구분에도 '기타'가 있으므로 "법인의 기타"로 명확히 적는다.
