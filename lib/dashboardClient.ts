@@ -42,7 +42,8 @@ export function initDashboard(data: DashboardData): () => void {
   const allMonths = data.allMonths;
   const trend = data.trend;
   let currentMonth = data.defaultMonth;
-  let currentMode: "month" | "cum" = "month";
+  // 첫 화면은 누계(YTD) 기준으로 연다 — 보고에서 먼저 보는 값이 당월보다 누계라서.
+  let currentMode: "month" | "cum" = "cum";
   // allMonths 기준으로, 실적이 존재하는 마지막 달의 인덱스. 이후 구간이 "미경과 기간".
   const lastActualIdx = allMonths.indexOf(months[months.length - 1]);
 
@@ -1346,8 +1347,11 @@ export function initDashboard(data: DashboardData): () => void {
   function renderSumTotal() {
     const m = data.byMonth[currentMonth];
     const cum = m.cumulative;
-    setText("sumTotalMonthSub", currentMonth + " · 백만원");
-    setText("sumTotalCumSub", cum.label + " · 백만원");
+    // 표 제목에 기준 기간을 직접 적는다 ("당월/당월 누계"보다 "6월 실적/6월 누계 실적"이 명확).
+    setText("sumTotalMonthTitle", `${currentMonth} 실적`);
+    setText("sumTotalCumTitle", `${currentMonth} 누계 실적`);
+    setText("sumTotalMonthSub", "백만원");
+    setText("sumTotalCumSub", `${months[0]}~${currentMonth} · 백만원`);
     setHtml("sumTotalMonthTable", allocTotalTable(m.allocationBoard.actual));
     setHtml("sumTotalCumTable", allocTotalTable(cum.allocationBoard.actual));
 
@@ -1442,7 +1446,9 @@ export function initDashboard(data: DashboardData): () => void {
     const hq = board.find((r) => r.label === "본사(HKR)");
     const corp = board.find((r) => r.label === "법인" && r.level === 0);
     if (!total || !hq || !corp) return;
-    setText("sumDetailSub", scopeLabel() + " · 백만원");
+    // 제목이 곧 기준 기간 — 당월/누계 선택에 따라 "6월 실적" / "6월 누계 실적"으로 바뀐다.
+    setText("sumDetailTitle", currentMode === "cum" ? `${currentMonth} 누계 실적` : `${currentMonth} 실적`);
+    setText("sumDetailSub", currentMode === "cum" ? `${months[0]}~${currentMonth} · 백만원` : "백만원");
 
     // 본사 구분별(인건비~기타) STB~건물 배부 내역 — 더 이상 "합계" 한 칸만이 아니라 전체 열을 채운다.
     const hqCatRows: SumDetailRow[] = scope.hqCategoryAlloc.map((c) => ({ label: c.category, alloc: c, indent: true }));
@@ -1529,7 +1535,7 @@ export function initDashboard(data: DashboardData): () => void {
     return (
       `<table class="pl-tbl sum-tbl">` +
       colgroupHtml(126, 96, 4) +
-      `<thead><tr><th>구분</th><th>${currentMonth} 실적</th><th class="col-sum">누계 실적</th>` +
+      `<thead><tr><th>구분</th><th>${currentMonth} 실적</th><th class="col-sum">${currentMonth} 누계 실적</th>` +
       `<th>연간 예산</th><th>누계 집행률</th></tr></thead>` +
       `<tbody>${hqBlock("본사")}${hqBlock("법인")}${totalRow}</tbody></table>`
     );

@@ -69,10 +69,10 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           <div className="filter-box" id="modeFilterBox">
             <label>보기</label>
             <div className="seg" id="modeToggle">
-              <button className="seg-btn active" data-mode="month" type="button">
+              <button className="seg-btn" data-mode="month" type="button">
                 당월
               </button>
-              <button className="seg-btn" data-mode="cum" type="button">
+              <button className="seg-btn active" data-mode="cum" type="button">
                 누계(YTD)
               </button>
             </div>
@@ -121,7 +121,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           <div className="sum-block-row">
             <div className="tbl-box" style={{ marginBottom: 0 }}>
               <div className="tbl-hd">
-                당월 <span className="sub" id="sumTotalMonthSub" />
+                <span id="sumTotalMonthTitle" /> <span className="sub" id="sumTotalMonthSub" />
               </div>
               <div className="tbl-scroll">
                 <div id="sumTotalMonthTable" />
@@ -141,7 +141,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           <div className="sum-block-row">
             <div className="tbl-box" style={{ marginBottom: 0 }}>
               <div className="tbl-hd">
-                당월 누계 <span className="sub" id="sumTotalCumSub" />
+                <span id="sumTotalCumTitle" /> <span className="sub" id="sumTotalCumSub" />
               </div>
               <div className="tbl-scroll">
                 <div id="sumTotalCumTable" />
@@ -236,7 +236,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         <div className="summary-row">
           <div className="tbl-box" style={{ marginBottom: 0 }}>
             <div className="tbl-hd">
-              본사 · 법인 집행 상세 <span className="sub" id="sumDetailSub" />
+              <span id="sumDetailTitle" /> <span className="sub" id="sumDetailSub" />
             </div>
             <div className="tbl-scroll">
               <div id="sumDetailTable" />
@@ -297,7 +297,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           <div className="sheet-hd-bar" />
           <div>
             <div className="sheet-eyebrow">Appendix A</div>
-            <div className="sheet-title">Humax(전사) 상세</div>
+            <div className="sheet-title">전사 상세</div>
           </div>
         </div>
         <div id="summaryInsight" />
@@ -477,7 +477,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           <div className="sheet-hd-bar" />
           <div>
             <div className="sheet-eyebrow">Appendix C</div>
-            <div className="sheet-title">Humax 계정별</div>
+            <div className="sheet-title">전사 계정별</div>
           </div>
         </div>
         <div id="catInsight" />
@@ -539,7 +539,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           <div className="sheet-hd-bar" />
           <div>
             <div className="sheet-eyebrow">Appendix D</div>
-            <div className="sheet-title">Humax 배부판</div>
+            <div className="sheet-title">전사 배부판</div>
           </div>
         </div>
         <div id="allocTrendInsight" />
