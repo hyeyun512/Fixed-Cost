@@ -257,31 +257,37 @@ footer{text-align:center;padding:22px;color:#94a3b8;font-size:11.5px}
   .cert-row{grid-template-columns:1fr 150px;gap:12px}
   .cert-value{font-size:15px}
 
-  /* Appendix A는 표 행이 많아, 가로 한 페이지에 들어가도록 카드·차트·표를 한 단계 더 줄인다. */
-  #tab-summary .callout{padding:7px 12px;font-size:11px;margin-bottom:8px}
-  #tab-summary .kpi-row{margin-bottom:8px}
-  #tab-summary .kcard{padding:7px 14px}
-  #tab-summary .klabel{font-size:9.5px;margin-bottom:1px}
-  #tab-summary .kval{font-size:16px}
-  #tab-summary .ksub{font-size:9.5px;margin-top:1px}
-  #tab-summary .chart-2eq{gap:10px;margin-bottom:8px}
-  #tab-summary .panel{padding:10px 12px}
-  #tab-summary .panel-hd{margin-bottom:5px}
-  #tab-summary .panel-title{font-size:12px}
-  #tab-summary .panel-sub{font-size:10px}
-  #tab-summary .chart-wrap-lg{height:94px}
-  #tab-summary .section-lead{margin:7px 0 3px}
-  #tab-summary .sheet-hd{margin-bottom:6px;padding-bottom:4px}
-  #tab-summary .sheet-title{font-size:15px}
-  #tab-summary .pl-tbl th{padding:2px 7px!important;font-size:8px!important}
-  #tab-summary .pl-tbl td{padding:1px 7px!important;font-size:9px!important}
+  /* Appendix는 표 행이 많아, 인쇄 분량을 줄이도록 카드·차트·표를 한 단계 더 줄인다.
+     (Appendix A는 이 설정으로 가로 한 페이지에 들어간다. B는 대계정 행이 많아 2페이지로 나뉜다.) */
+  #tab-summary .callout,#tab-evcs .callout,#tab-category .callout{padding:7px 12px;font-size:11px;margin-bottom:8px}
+  #tab-summary .kpi-row,#tab-evcs .kpi-row{margin-bottom:8px}
+  #tab-summary .kcard,#tab-evcs .kcard{padding:7px 14px}
+  #tab-summary .klabel,#tab-evcs .klabel{font-size:9.5px;margin-bottom:1px}
+  #tab-summary .kval,#tab-evcs .kval{font-size:16px}
+  #tab-summary .ksub,#tab-evcs .ksub{font-size:9.5px;margin-top:1px}
+  #tab-summary .chart-2eq,#tab-evcs .chart-2eq{gap:10px;margin-bottom:8px}
+  #tab-summary .panel,#tab-evcs .panel,#tab-category .panel{padding:10px 12px}
+  #tab-summary .panel-hd,#tab-evcs .panel-hd,#tab-category .panel-hd{margin-bottom:5px}
+  #tab-summary .panel-title,#tab-evcs .panel-title,#tab-category .panel-title{font-size:12px}
+  #tab-summary .panel-sub,#tab-evcs .panel-sub,#tab-category .panel-sub{font-size:10px}
+  #tab-summary .chart-wrap-lg,#tab-evcs .chart-wrap-lg,#tab-category .chart-wrap-lg{height:94px}
+  #tab-summary .section-lead,#tab-evcs .section-lead,#tab-category .section-lead,#tab-alloc .section-lead{margin:7px 0 3px}
+  #tab-summary .sheet-hd,#tab-evcs .sheet-hd,#tab-category .sheet-hd,#tab-alloc .sheet-hd{margin-bottom:6px;padding-bottom:4px}
+  #tab-summary .sheet-title,#tab-evcs .sheet-title,#tab-category .sheet-title,#tab-alloc .sheet-title{font-size:15px}
+  #tab-summary .tbl-hd,#tab-evcs .tbl-hd,#tab-category .tbl-hd,#tab-alloc .tbl-hd{padding:5px 10px;font-size:11px}
+  #tab-summary .pl-tbl th,#tab-evcs .pl-tbl th,#tab-category .pl-tbl th,#tab-alloc .pl-tbl th{padding:2px 7px!important;font-size:8px!important}
+  #tab-summary .pl-tbl td,#tab-evcs .pl-tbl td,#tab-category .pl-tbl td,#tab-alloc .pl-tbl td{padding:1px 7px!important;font-size:9px!important}
+  #tab-evcs .cert-chart{height:120px}
+  /* 표/패널이 페이지 경계에서 어색하게 잘리지 않도록 한다 (여러 페이지로 나뉘는 Appendix용). */
+  #tab-evcs .tbl-box,#tab-evcs .panel,#tab-category .tbl-box,#tab-category .panel{break-inside:avoid}
   /* 비고가 여러 줄로 늘어나면 표가 한 페이지를 넘긴다 — 인쇄에서는 한 줄로 줄이고 넘치면 …로 자른다
      (화면에서는 전체 문장을 그대로 볼 수 있다). */
-  #tab-summary .pl-tbl .remark-cell{font-size:8px;line-height:1.2}
+  #tab-summary .pl-tbl .remark-cell,#tab-evcs .pl-tbl .remark-cell,#tab-category .pl-tbl .remark-cell{font-size:8px;line-height:1.2}
   #tab-summary .remark-clip{display:block;max-width:330px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #tab-summary .hq-chip{font-size:8px;padding:0 4px;margin-right:4px}
+  #tab-evcs .remark-clip,#tab-category .remark-clip{display:block;max-width:190px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #tab-summary .hq-chip,#tab-evcs .hq-chip,#tab-category .hq-chip{font-size:8px;padding:0 4px;margin-right:4px}
   /* 집행률 배지가 셀 안에서 가장 큰 요소라 행 높이를 결정한다 — 배지도 함께 줄여야 표가 실제로 작아진다. */
-  #tab-summary .pl-tbl .kbadge{font-size:8px;padding:1px 5px}
+  #tab-summary .pl-tbl .kbadge,#tab-evcs .pl-tbl .kbadge,#tab-category .pl-tbl .kbadge,#tab-alloc .pl-tbl .kbadge{font-size:8px;padding:1px 5px}
   .summary-mom-title{margin:10px 0 6px;padding-top:8px}
   .summary-callout{padding:8px 12px!important;margin-bottom:6px!important}
   .summary-comment-list{font-size:11.5px;line-height:1.4}

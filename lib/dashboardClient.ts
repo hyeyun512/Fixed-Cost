@@ -744,7 +744,9 @@ export function initDashboard(data: DashboardData): () => void {
     return attributionRemark(r.byDept.map((d) => ({ label: stripDeptNumber(d.dept), actual: d.actual, budget: d.budget })), r.actual, r.budget);
   }
   /** 대계정별 상세 표 (구분 컬럼 + 비고). 계정별 탭과 EVCS 탭이 공유한다. */
-  function mainAccountTable(rows: MainAccountRow[]): string {
+  function mainAccountTable(allRows: MainAccountRow[]): string {
+    // 예산·실적이 모두 0인 대계정은 읽을 정보가 없는데 행만 차지한다 (인쇄 분량도 그만큼 늘어난다).
+    const rows = allRows.filter((r) => r.actual !== 0 || r.budget !== 0);
     const bodyRows = rows
       .map((r) => {
         const diff = r.actual - r.budget;
@@ -752,7 +754,7 @@ export function initDashboard(data: DashboardData): () => void {
           <td${cls(r.budget)}>${fmtM(r.budget)}</td><td${cls(r.actual)}>${fmtM(r.actual)}</td>
           <td${diffCls(diff)}>${diff >= 0 ? "+" : ""}${fmtM(diff)}</td>
           <td class="badge-cell">${rateBadgeCell(rateOf(r.actual, r.budget))}</td>
-          <td class="remark-cell">${mainAccountRemark(r)}</td></tr>`;
+          <td class="remark-cell"><span class="remark-clip">${mainAccountRemark(r)}</span></td></tr>`;
       })
       .join("");
     const totA = rows.reduce((sum, r) => sum + r.actual, 0);
